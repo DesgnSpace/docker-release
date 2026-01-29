@@ -1,0 +1,43 @@
+services:
+  docker-release:
+    build:
+      context: ../../
+      dockerfile: Dockerfile
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - traefik-dynamic:/etc/traefik/dynamic:rw
+    environment:
+      - RELEASE_STATE_DIR=/var/lib/docker-release
+      - RELEASE_CONFIG_DIR=/etc/traefik/dynamic
+    command: ["watch"]
+
+  traefik:
+    image: traefik:v3.4
+    ports:
+      - "8082:80"
+      - "8083:8080"
+    volumes:
+      - traefik-dynamic:/etc/traefik/dynamic:ro
+    command:
+      - "--api.insecure=true"
+      - "--entrypoints.web.address=:80"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
+
+  app:
+    image: nginx:alpine
+    deploy:
+      replicas: 2
+    labels:
+      - "release.enable=true"
+      - "release.provider=traefik"
+      - "release.strategy=linear"
+      - "release.health_check_timeout=30s"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  traefik-dynamic:

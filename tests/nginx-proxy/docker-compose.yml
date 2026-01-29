@@ -1,0 +1,45 @@
+services:
+  docker-release:
+    build:
+      context: ../../
+      dockerfile: Dockerfile
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - nginx-tmpl:/shared/nginx-tmpl:rw
+    environment:
+      - RELEASE_STATE_DIR=/var/lib/docker-release
+    command: ["watch"]
+
+  nginx-proxy:
+    image: nginxproxy/nginx-proxy:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+      - nginx-tmpl:/app:ro
+    depends_on:
+      docker-release:
+        condition: service_started
+
+  app:
+    image: nginx:alpine
+    deploy:
+      replicas: 2
+    labels:
+      - "release.enable=true"
+      - "release.provider=nginx-proxy"
+      - "release.strategy=canary"
+      - "release.canary.start_percentage=25"
+      - "release.canary.step=25"
+      - "release.canary.interval=30s"
+      - "release.canary.affinity=cookie"
+    environment:
+      - VIRTUAL_HOST=app.local
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  nginx-tmpl:
