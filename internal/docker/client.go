@@ -97,9 +97,17 @@ func (c *Client) FindContainerByService(ctx context.Context, serviceName string)
 }
 
 func (c *Client) CreateContainerFromImage(ctx context.Context, ref types.Container) (string, error) {
+	refInfo, err := c.api.ContainerInspect(ctx, ref.ID)
+	if err != nil {
+		return "", fmt.Errorf("inspecting reference container: %w", err)
+	}
+
 	cfg := &container.Config{
-		Image:  ref.Image,
-		Labels: ref.Labels,
+		Image:        ref.Image,
+		Labels:       ref.Labels,
+		Healthcheck:  refInfo.Config.Healthcheck,
+		ExposedPorts: refInfo.Config.ExposedPorts,
+		Env:          refInfo.Config.Env,
 	}
 
 	primaryNet, primaryNetID := primaryNetwork(ref)

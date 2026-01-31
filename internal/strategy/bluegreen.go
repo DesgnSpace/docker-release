@@ -56,14 +56,49 @@ func (bg *BlueGreen) Execute(ctx context.Context, d *Deployment) error {
 		}
 	}
 
-	log.Printf("[blue-green] all green containers healthy, switching traffic")
+	log.Printf("[blue-green] all green containers healthy, adding to upstream alongside blue")
 
 	upstream := &provider.UpstreamState{Service: d.Service, UpstreamName: d.UpstreamName()}
+	for _, c := range d.Old {
+		upstream.Servers = append(upstream.Servers, provider.Server{Addr: c.Addr})
+	}
+	// TODO: when a container has a healthcheck and isn't yet fully healthy,
+	// add its upstream server with a "down" marker so nginx doesn't route
+	// traffic to it until it's ready.
 	for _, c := range d.New {
 		upstream.Servers = append(upstream.Servers, provider.Server{Addr: c.Addr})
 	}
 
 	if err := bg.provider.GenerateConfig(upstream); err != nil {
+		return fmt.Errorf("generating mixed config: %w", err)
+	}
+
+	if err := bg.provider.Reload(); err != nil {
+		return fmt.Errorf("reloading provider: %w", err)
+	}
+
+	ds.CurrentWeight = 50
+	if err := bg.state.Save(ds); err != nil {
+		return fmt.Errorf("saving soak state: %w", err)
+	}
+
+	soakTime := d.Config.BlueGreen.SoakTime
+	log.Printf("[blue-green] soaking for %s with both blue and green serving traffic", soakTime)
+
+	select {
+	case <-time.After(soakTime):
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
+	log.Printf("[blue-green] soak complete, switching traffic to green")
+
+	finalUpstream := &provider.UpstreamState{Service: d.Service, UpstreamName: d.UpstreamName()}
+	for _, c := range d.New {
+		finalUpstream.Servers = append(finalUpstream.Servers, provider.Server{Addr: c.Addr})
+	}
+
+	if err := bg.provider.GenerateConfig(finalUpstream); err != nil {
 		return fmt.Errorf("generating green config: %w", err)
 	}
 
@@ -76,16 +111,15 @@ func (bg *BlueGreen) Execute(ctx context.Context, d *Deployment) error {
 		return fmt.Errorf("saving cutover state: %w", err)
 	}
 
-	soakTime := d.Config.BlueGreen.SoakTime
-	log.Printf("[blue-green] soaking for %s", soakTime)
+	log.Printf("[blue-green] draining blue containers for %s", d.Config.DrainTimeout)
 
 	select {
-	case <-time.After(soakTime):
+	case <-time.After(d.Config.DrainTimeout):
 	case <-ctx.Done():
 		return ctx.Err()
 	}
 
-	log.Printf("[blue-green] soak complete, tearing down blue containers")
+	log.Printf("[blue-green] tearing down blue containers")
 
 	for _, c := range d.Old {
 		if err := bg.docker.Stop(ctx, c.ID, 10); err != nil {

@@ -39,7 +39,15 @@ func main() {
 			service = os.Args[3]
 		}
 		run(func(ctrl *controller.Controller) error {
-			return ctrl.Release(context.Background(), service, force)
+			ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+			defer cancel()
+
+			if err := ctrl.Release(ctx, service, force); err != nil {
+				return err
+			}
+
+			ctrl.WaitDeployments()
+			return nil
 		})
 	case "rollback":
 		if len(os.Args) < 3 {

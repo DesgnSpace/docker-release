@@ -47,23 +47,28 @@ func TestBlueGreenExecute(t *testing.T) {
 		t.Errorf("expected 2 health checks, got %d", len(docker.healthyCalls))
 	}
 
-	if len(prov.configs) != 1 {
-		t.Fatalf("expected 1 config generation, got %d", len(prov.configs))
+	if len(prov.configs) != 2 {
+		t.Fatalf("expected 2 config generations (mixed + green), got %d", len(prov.configs))
 	}
 
-	cfg := prov.configs[0]
-	if len(cfg.Servers) != 2 {
-		t.Errorf("expected 2 servers (green only), got %d", len(cfg.Servers))
+	mixed := prov.configs[0]
+	if len(mixed.Servers) != 4 {
+		t.Errorf("expected 4 servers in mixed config (blue+green), got %d", len(mixed.Servers))
 	}
 
-	for _, s := range cfg.Servers {
+	final := prov.configs[1]
+	if len(final.Servers) != 2 {
+		t.Errorf("expected 2 servers in final config (green only), got %d", len(final.Servers))
+	}
+
+	for _, s := range final.Servers {
 		if !strings.Contains(s.Addr, "172.18.0.1") {
-			t.Errorf("config should only have green servers, got %s", s.Addr)
+			t.Errorf("final config should only have green servers, got %s", s.Addr)
 		}
 	}
 
-	if prov.reloads != 1 {
-		t.Errorf("expected 1 reload, got %d", prov.reloads)
+	if prov.reloads != 2 {
+		t.Errorf("expected 2 reloads, got %d", prov.reloads)
 	}
 
 	if len(docker.stopCalls) != 2 {
