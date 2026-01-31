@@ -12,6 +12,7 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/errdefs"
 )
 
 type Client struct {
@@ -45,11 +46,21 @@ func (c *Client) Inspect(ctx context.Context, containerID string) (types.Contain
 
 func (c *Client) Stop(ctx context.Context, containerID string, timeoutSeconds int) error {
 	timeout := timeoutSeconds
-	return c.api.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &timeout})
+	err := c.api.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &timeout})
+	if errdefs.IsNotFound(err) {
+		return nil
+	}
+
+	return err
 }
 
 func (c *Client) Remove(ctx context.Context, containerID string) error {
-	return c.api.ContainerRemove(ctx, containerID, container.RemoveOptions{Force: true})
+	err := c.api.ContainerRemove(ctx, containerID, container.RemoveOptions{Force: true})
+	if errdefs.IsNotFound(err) {
+		return nil
+	}
+
+	return err
 }
 
 func (c *Client) Logs(ctx context.Context, containerID string, lines string) (io.ReadCloser, error) {

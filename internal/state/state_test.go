@@ -1,9 +1,11 @@
 package state
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestLoadMissing(t *testing.T) {
@@ -116,5 +118,137 @@ func TestSaveCreatesDir(t *testing.T) {
 
 	if _, err := os.Stat(dir); err != nil {
 		t.Errorf("dir not created: %v", err)
+	}
+}
+
+func TestSaveSetsUpdatedAt(t *testing.T) {
+	dir := t.TempDir()
+	mgr := NewManager(dir)
+
+	s := &DeploymentState{Service: "webapp", Status: StatusInProgress}
+	before := time.Now()
+
+	if err := mgr.Save(s); err != nil {
+		t.Fatalf("save error: %v", err)
+	}
+
+	after := time.Now()
+
+	if s.UpdatedAt.Before(before) || s.UpdatedAt.After(after) {
+		t.Errorf("UpdatedAt = %v, want between %v and %v", s.UpdatedAt, before, after)
+	}
+
+	loaded, err := mgr.Load("webapp")
+	if err != nil {
+		t.Fatalf("load error: %v", err)
+	}
+
+	if loaded.UpdatedAt.IsZero() {
+		t.Error("loaded UpdatedAt should not be zero")
+	}
+}
+
+func TestIsStaleZeroTimestamp(t *testing.T) {
+	s := &DeploymentState{Status: StatusInProgress}
+
+	if !s.IsStale(DefaultStaleThreshold) {
+		t.Error("zero UpdatedAt with in_progress should be stale")
+	}
+}
+
+func TestIsStaleRecentInProgress(t *testing.T) {
+	s := &DeploymentState{
+		Status:    StatusInProgress,
+		UpdatedAt: time.Now(),
+	}
+
+	if s.IsStale(DefaultStaleThreshold) {
+		t.Error("recent in_progress should not be stale")
+	}
+}
+
+func TestIsStaleOldInProgress(t *testing.T) {
+	s := &DeploymentState{
+		Status:    StatusInProgress,
+		UpdatedAt: time.Now().Add(-1 * time.Hour),
+	}
+
+	if !s.IsStale(DefaultStaleThreshold) {
+		t.Error("old in_progress should be stale")
+	}
+}
+
+func TestIsStaleIdleNeverStale(t *testing.T) {
+	s := &DeploymentState{
+		Status:    StatusIdle,
+		UpdatedAt: time.Now().Add(-24 * time.Hour),
+	}
+
+	if s.IsStale(DefaultStaleThreshold) {
+		t.Error("idle should never be stale regardless of age")
+	}
+}
+
+func TestIsStaleRollingBack(t *testing.T) {
+	s := &DeploymentState{
+		Status:    StatusRollingBack,
+		UpdatedAt: time.Now().Add(-1 * time.Hour),
+	}
+
+	if !s.IsStale(DefaultStaleThreshold) {
+		t.Error("old rolling_back should be stale")
+	}
+}
+
+func TestLegacyJSONBackwardCompat(t *testing.T) {
+	dir := t.TempDir()
+	mgr := NewManager(dir)
+
+	legacy := `{"service":"webapp","status":"in_progress","strategy":"linear","current_weight":0}`
+	path := filepath.Join(dir, "webapp_state.json")
+
+	if err := os.WriteFile(path, []byte(legacy), 0o644); err != nil {
+		t.Fatalf("write error: %v", err)
+	}
+
+	loaded, err := mgr.Load("webapp")
+	if err != nil {
+		t.Fatalf("load error: %v", err)
+	}
+
+	if loaded.Status != StatusInProgress {
+		t.Errorf("status = %s, want in_progress", loaded.Status)
+	}
+
+	if !loaded.UpdatedAt.IsZero() {
+		t.Error("legacy file should have zero UpdatedAt")
+	}
+
+	if !loaded.IsStale(DefaultStaleThreshold) {
+		t.Error("legacy in_progress file should be treated as stale")
+	}
+}
+
+func TestUpdatedAtPersistedInJSON(t *testing.T) {
+	dir := t.TempDir()
+	mgr := NewManager(dir)
+
+	s := &DeploymentState{Service: "webapp", Status: StatusInProgress}
+	if err := mgr.Save(s); err != nil {
+		t.Fatalf("save error: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, "webapp_state.json"))
+	if err != nil {
+		t.Fatalf("read error: %v", err)
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+
+	if _, ok := raw["updated_at"]; !ok {
+		t.Error("updated_at field missing from JSON")
 	}
 }

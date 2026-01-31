@@ -18,6 +18,8 @@ const (
 	StatusRollingBack Status = "rolling_back"
 )
 
+const DefaultStaleThreshold = 30 * time.Minute
+
 type DeploymentState struct {
 	Service              string     `json:"service"`
 	Status               Status     `json:"status"`
@@ -26,6 +28,19 @@ type DeploymentState struct {
 	ActiveDeploymentID   string     `json:"active_deployment_id"`
 	PreviousDeploymentID string     `json:"previous_deployment_id"`
 	Containers           Containers `json:"containers"`
+	UpdatedAt            time.Time  `json:"updated_at"`
+}
+
+func (s *DeploymentState) IsStale(threshold time.Duration) bool {
+	if s.Status != StatusInProgress && s.Status != StatusRollingBack {
+		return false
+	}
+
+	if s.UpdatedAt.IsZero() {
+		return true
+	}
+
+	return time.Since(s.UpdatedAt) > threshold
 }
 
 type Containers struct {
@@ -64,6 +79,8 @@ func (m *Manager) Load(service string) (*DeploymentState, error) {
 }
 
 func (m *Manager) Save(s *DeploymentState) error {
+	s.UpdatedAt = time.Now()
+
 	if err := os.MkdirAll(m.dir, 0o755); err != nil {
 		return fmt.Errorf("creating state dir: %w", err)
 	}

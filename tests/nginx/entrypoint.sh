@@ -1,5 +1,7 @@
 #!/bin/sh
 BUILD=$(cat /usr/share/nginx/html/version.txt)
+RANDOM_ID=$(head -c 8 /dev/urandom | base64 | tr -dc a-z0-9 | head -c 6)
+TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 cat > /usr/share/nginx/html/index.html <<EOF
 <!DOCTYPE html>
 <html lang="en">
@@ -45,6 +47,14 @@ cat > /usr/share/nginx/html/index.html <<EOF
       font-weight: 600;
       color: #333;
     }
+    .session {
+      font-family: monospace;
+      font-size: 0.8rem;
+      background: #f0f0f0;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      color: #666;
+    }
     h2 {
       font-size: 1rem;
       color: #888;
@@ -81,6 +91,8 @@ cat > /usr/share/nginx/html/index.html <<EOF
     <div class="info">
       <span><span class="label">Container:</span> $(hostname)</span>
       <span><span class="label">Build:</span> ${BUILD}</span>
+      <span><span class="label">Session:</span> <span class="session">${RANDOM_ID}</span></span>
+      <span><span class="label">Time:</span> ${TIMESTAMP}</span>
     </div>
     <h2>Select Strategy</h2>
     <div class="links">

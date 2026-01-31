@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/malico/docker-release/internal/config"
 	"github.com/malico/docker-release/internal/docker"
@@ -167,8 +168,12 @@ func (c *Controller) handleStart(ctx context.Context, containerID string, attrs 
 	}
 
 	if ds.Status == state.StatusInProgress {
-		log.Printf("deployment already in progress for %s, skipping", serviceName)
-		return
+		if !ds.IsStale(state.DefaultStaleThreshold) {
+			log.Printf("deployment already in progress for %s, skipping", serviceName)
+			return
+		}
+
+		log.Printf("clearing stale deployment state for %s (last updated: %s)", serviceName, formatTimestamp(ds.UpdatedAt))
 	}
 
 	cfg, err := config.ParseLabels(serviceContainers[0].Labels)
@@ -189,6 +194,15 @@ func (c *Controller) deploy(parentCtx context.Context, serviceName string, cfg *
 	ctx, cancel := context.WithCancel(parentCtx)
 	c.deployments[serviceName] = cancel
 	c.mu.Unlock()
+
+	ds := &state.DeploymentState{
+		Service:  serviceName,
+		Status:   state.StatusInProgress,
+		Strategy: string(cfg.Strategy),
+	}
+	if err := c.stateManager.Save(ds); err != nil {
+		log.Printf("error saving early state for %s: %v", serviceName, err)
+	}
 
 	defer func() {
 		c.mu.Lock()
@@ -333,6 +347,15 @@ func (c *Controller) resolveContainers(ctx context.Context, containers []types.C
 }
 
 func (c *Controller) Release(ctx context.Context, service string, force bool) error {
+	ds, err := c.stateManager.Load(service)
+	if err != nil {
+		return fmt.Errorf("loading state: %w", err)
+	}
+
+	if ds.Status == state.StatusInProgress && !ds.IsStale(state.DefaultStaleThreshold) {
+		return fmt.Errorf("deployment already in progress for %q (started %s)", service, formatTimestamp(ds.UpdatedAt))
+	}
+
 	containers, err := c.docker.ListManagedContainers(ctx)
 	if err != nil {
 		return fmt.Errorf("listing containers: %w", err)
@@ -491,9 +514,15 @@ func (c *Controller) Status(ctx context.Context, service string) error {
 		return fmt.Errorf("loading state: %w", err)
 	}
 
+	statusStr := string(s.Status)
+	if s.IsStale(state.DefaultStaleThreshold) {
+		statusStr += " (stale)"
+	}
+
 	fmt.Printf("Service:    %s\n", s.Service)
-	fmt.Printf("Status:     %s\n", s.Status)
+	fmt.Printf("Status:     %s\n", statusStr)
 	fmt.Printf("Strategy:   %s\n", s.Strategy)
+	fmt.Printf("Updated:    %s\n", formatTimestamp(s.UpdatedAt))
 	fmt.Printf("Weight:     %d%%\n", s.CurrentWeight)
 	fmt.Printf("Stable:     %v\n", s.Containers.Stable)
 	fmt.Printf("Canary:     %v\n", s.Containers.Canary)
@@ -530,6 +559,10 @@ func (c *Controller) statusAll(ctx context.Context) error {
 		status := string(s.Status)
 		if status == "" {
 			status = "idle"
+		}
+
+		if s.IsStale(state.DefaultStaleThreshold) {
+			status += " (stale)"
 		}
 
 		fmt.Printf("%-20s %s\n", name, status)
@@ -708,7 +741,7 @@ func (c *Controller) refreshServiceConfig(ctx context.Context, serviceName strin
 	}
 
 	ds, err := c.stateManager.Load(serviceName)
-	if err == nil && ds.Status == state.StatusInProgress {
+	if err == nil && ds.Status == state.StatusInProgress && !ds.IsStale(state.DefaultStaleThreshold) {
 		log.Printf("deployment in progress for %s (from another process), skipping config refresh", serviceName)
 		return
 	}
@@ -748,4 +781,12 @@ func (c *Controller) handleHealthStatus(ctx context.Context, containerID string,
 	log.Printf("health status changed: %s (service=%s)", containerID[:12], serviceName)
 
 	c.refreshServiceConfig(ctx, serviceName)
+}
+
+func formatTimestamp(t time.Time) string {
+	if t.IsZero() {
+		return "unknown"
+	}
+
+	return t.Format("2006-01-02 15:04:05")
 }
