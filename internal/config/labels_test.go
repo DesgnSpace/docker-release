@@ -135,6 +135,65 @@ func TestParseLabelsNoneProvider(t *testing.T) {
 	}
 }
 
+func TestParseLabelsHealthCheck(t *testing.T) {
+	labels := map[string]string{
+		"release.enable":                   "true",
+		"release.healthcheck.path":         "/health",
+		"release.healthcheck.interval":     "10s",
+		"release.healthcheck.timeout":      "3s",
+		"release.healthcheck.retries":      "5",
+		"release.healthcheck.start_period": "30s",
+	}
+
+	cfg, err := ParseLabels(labels)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.HealthCheck.Path != "/health" {
+		t.Errorf("healthcheck.path = %s, want /health", cfg.HealthCheck.Path)
+	}
+	if cfg.HealthCheck.Interval != 10*time.Second {
+		t.Errorf("healthcheck.interval = %v, want 10s", cfg.HealthCheck.Interval)
+	}
+	if cfg.HealthCheck.Timeout != 3*time.Second {
+		t.Errorf("healthcheck.timeout = %v, want 3s", cfg.HealthCheck.Timeout)
+	}
+	if cfg.HealthCheck.Retries != 5 {
+		t.Errorf("healthcheck.retries = %d, want 5", cfg.HealthCheck.Retries)
+	}
+	if cfg.HealthCheck.StartPeriod != 30*time.Second {
+		t.Errorf("healthcheck.start_period = %v, want 30s", cfg.HealthCheck.StartPeriod)
+	}
+}
+
+func TestParseLabelsHealthCheckDefaults(t *testing.T) {
+	labels := map[string]string{
+		"release.enable": "true",
+	}
+
+	cfg, err := ParseLabels(labels)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.HealthCheck.Path != "" {
+		t.Errorf("default healthcheck.path = %s, want empty", cfg.HealthCheck.Path)
+	}
+	if cfg.HealthCheck.Interval != 5*time.Second {
+		t.Errorf("default healthcheck.interval = %v, want 5s", cfg.HealthCheck.Interval)
+	}
+	if cfg.HealthCheck.Timeout != 5*time.Second {
+		t.Errorf("default healthcheck.timeout = %v, want 5s", cfg.HealthCheck.Timeout)
+	}
+	if cfg.HealthCheck.Retries != 3 {
+		t.Errorf("default healthcheck.retries = %d, want 3", cfg.HealthCheck.Retries)
+	}
+	if cfg.HealthCheck.StartPeriod != 0 {
+		t.Errorf("default healthcheck.start_period = %v, want 0", cfg.HealthCheck.StartPeriod)
+	}
+}
+
 func TestParseLabelsInvalidPercentage(t *testing.T) {
 	labels := map[string]string{
 		"release.enable":                  "true",

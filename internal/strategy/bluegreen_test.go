@@ -55,6 +55,9 @@ func TestBlueGreenExecute(t *testing.T) {
 	if len(mixed.Servers) != 4 {
 		t.Errorf("expected 4 servers in mixed config (blue+green), got %d", len(mixed.Servers))
 	}
+	if mixed.Affinity != "ip" {
+		t.Errorf("mixed config should use ip affinity during soak, got %q", mixed.Affinity)
+	}
 
 	final := prov.configs[1]
 	if len(final.Servers) != 2 {

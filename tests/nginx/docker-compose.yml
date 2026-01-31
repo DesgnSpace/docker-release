@@ -21,7 +21,7 @@ services:
       - "8081:80"
     volumes:
       - nginx-config:/etc/nginx/conf.d/custom:ro
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       docker-release:
         condition: service_started
@@ -34,12 +34,6 @@ services:
         BUILD_ID: "linear"
     deploy:
       replicas: 2
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:80"]
-      interval: 5s
-      timeout: 3s
-      retries: 3
-      start_period: 10s
     labels:
       - "release.enable=true"
       - "release.provider=nginx"
@@ -48,6 +42,11 @@ services:
       - "release.drain_timeout=5s"
       - "release.nginx.container=nginx"
       - "release.nginx.config_dir=/shared/nginx-config"
+      - "release.healthcheck.path=/"
+      - "release.healthcheck.interval=5s"
+      - "release.healthcheck.timeout=3s"
+      - "release.healthcheck.retries=3"
+      - "release.healthcheck.start_period=10s"
 
   canary_app:
     build:
@@ -57,12 +56,6 @@ services:
         BUILD_ID: "canary"
     deploy:
       replicas: 2
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:80"]
-      interval: 5s
-      timeout: 3s
-      retries: 3
-      start_period: 10s
     labels:
       - "release.enable=true"
       - "release.provider=nginx"
@@ -73,6 +66,11 @@ services:
       - "release.health_check_timeout=20s"
       - "release.nginx.container=nginx"
       - "release.nginx.config_dir=/shared/nginx-config"
+      - "release.healthcheck.path=/"
+      - "release.healthcheck.interval=5s"
+      - "release.healthcheck.timeout=3s"
+      - "release.healthcheck.retries=3"
+      - "release.healthcheck.start_period=10s"
 
   blue_green_app:
     build:
@@ -82,12 +80,6 @@ services:
         BUILD_ID: "blue_green"
     deploy:
       replicas: 2
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:80"]
-      interval: 5s
-      timeout: 3s
-      retries: 3
-      start_period: 10s
     labels:
       - "release.enable=true"
       - "release.provider=nginx"
@@ -96,6 +88,11 @@ services:
       - "release.health_check_timeout=20s"
       - "release.nginx.container=nginx"
       - "release.nginx.config_dir=/shared/nginx-config"
+      - "release.healthcheck.path=/"
+      - "release.healthcheck.interval=5s"
+      - "release.healthcheck.timeout=3s"
+      - "release.healthcheck.retries=3"
+      - "release.healthcheck.start_period=10s"
 
 volumes:
   nginx-config:

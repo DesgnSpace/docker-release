@@ -11,6 +11,7 @@ import (
 
 	"github.com/malico/docker-release/internal/config"
 	"github.com/malico/docker-release/internal/docker"
+	"github.com/malico/docker-release/internal/healthcheck"
 	"github.com/malico/docker-release/internal/monitor"
 	"github.com/malico/docker-release/internal/provider"
 	"github.com/malico/docker-release/internal/rollback"
@@ -140,18 +141,18 @@ func (c *Controller) handleStart(ctx context.Context, containerID string, attrs 
 	}
 
 	for _, ctrs := range images {
-		isOld := true
+		isNew := false
 		for _, ctr := range ctrs {
 			if ctr.ID == containerID {
-				isOld = false
+				isNew = true
 				break
 			}
 		}
 
-		if isOld {
-			old = ctrs
-		} else {
+		if isNew {
 			new = ctrs
+		} else {
+			old = append(old, ctrs...)
 		}
 	}
 
@@ -199,7 +200,6 @@ func (c *Controller) deploy(parentCtx context.Context, serviceName string, cfg *
 	log.Printf("starting %s deployment for %s", cfg.Strategy, serviceName)
 
 	prov := c.createProvider(cfg)
-	strat := c.createStrategy(cfg, prov)
 
 	oldInfos, err := c.resolveContainers(ctx, oldContainers)
 	if err != nil {
@@ -228,7 +228,29 @@ func (c *Controller) deploy(parentCtx context.Context, serviceName string, cfg *
 		newIDs[i] = info.ID
 	}
 
-	mon := monitor.NewHealthMonitor(c.docker, newIDs, func(containerID, reason string) {
+	var dockerOps strategy.DockerOps = c.docker
+	var healthOps monitor.HealthChecker = c.docker
+
+	if cfg.HealthCheck.Path != "" {
+		log.Printf("using HTTP health checks for %s (path=%s, interval=%s, retries=%d)",
+			serviceName, cfg.HealthCheck.Path, cfg.HealthCheck.Interval, cfg.HealthCheck.Retries)
+
+		addrMap := make(map[string]string, len(newInfos))
+		for _, info := range newInfos {
+			addrMap[info.ID] = info.Addr
+		}
+
+		checker := healthcheck.New(c.docker, cfg.HealthCheck)
+		checker.Start(deployCtx, newIDs, addrMap)
+		defer checker.Shutdown()
+
+		dockerOps = checker
+		healthOps = checker
+	}
+
+	strat := c.createStrategy(cfg, prov, dockerOps)
+
+	mon := monitor.NewHealthMonitor(healthOps, newIDs, func(containerID, reason string) {
 		log.Printf("auto-rollback triggered for %s: %s", serviceName, reason)
 		deployCancel()
 	})
@@ -280,14 +302,14 @@ func (c *Controller) getNginxProxyProvider(cfg *config.ServiceConfig) provider.P
 	return prov
 }
 
-func (c *Controller) createStrategy(cfg *config.ServiceConfig, prov provider.Provider) strategy.Strategy {
+func (c *Controller) createStrategy(cfg *config.ServiceConfig, prov provider.Provider, dockerOps strategy.DockerOps) strategy.Strategy {
 	switch cfg.Strategy {
 	case config.StrategyBlueGreen:
-		return strategy.NewBlueGreen(c.docker, prov, c.stateManager)
+		return strategy.NewBlueGreen(dockerOps, prov, c.stateManager)
 	case config.StrategyCanary:
-		return strategy.NewCanary(c.docker, prov, c.stateManager)
+		return strategy.NewCanary(dockerOps, prov, c.stateManager)
 	default:
-		return strategy.NewLinear(c.docker, prov, c.stateManager)
+		return strategy.NewLinear(dockerOps, prov, c.stateManager)
 	}
 }
 
@@ -435,6 +457,7 @@ func (c *Controller) Rollback(ctx context.Context, service string) error {
 	coord.RegisterStrategy("linear", strategy.NewLinear(c.docker, prov, c.stateManager))
 	coord.RegisterStrategy("blue-green", strategy.NewBlueGreen(c.docker, prov, c.stateManager))
 	coord.RegisterStrategy("canary", strategy.NewCanary(c.docker, prov, c.stateManager))
+
 
 	return coord.Execute(ctx, service)
 }

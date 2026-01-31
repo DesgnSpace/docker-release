@@ -30,6 +30,28 @@ func TestRenderUpstreamBasic(t *testing.T) {
 	if strings.Contains(got, "ip_hash") {
 		t.Error("ip_hash should not be present without affinity")
 	}
+	if !strings.Contains(got, "least_conn;") {
+		t.Error("least_conn should be present by default")
+	}
+}
+
+func TestRenderUpstreamAffinityNoLeastConn(t *testing.T) {
+	state := &UpstreamState{
+		Service:  "app",
+		Affinity: "ip",
+		Servers: []Server{
+			{Addr: "172.18.0.5:80"},
+		},
+	}
+
+	got := renderUpstream(state)
+
+	if !strings.Contains(got, "ip_hash;") {
+		t.Error("missing ip_hash")
+	}
+	if strings.Contains(got, "least_conn") {
+		t.Error("least_conn should not be present when affinity is set")
+	}
 }
 
 func TestRenderUpstreamWithWeights(t *testing.T) {

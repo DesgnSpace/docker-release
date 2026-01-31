@@ -58,13 +58,10 @@ func (bg *BlueGreen) Execute(ctx context.Context, d *Deployment) error {
 
 	log.Printf("[blue-green] all green containers healthy, adding to upstream alongside blue")
 
-	upstream := &provider.UpstreamState{Service: d.Service, UpstreamName: d.UpstreamName()}
+	upstream := &provider.UpstreamState{Service: d.Service, UpstreamName: d.UpstreamName(), Affinity: "ip"}
 	for _, c := range d.Old {
 		upstream.Servers = append(upstream.Servers, provider.Server{Addr: c.Addr})
 	}
-	// TODO: when a container has a healthcheck and isn't yet fully healthy,
-	// add its upstream server with a "down" marker so nginx doesn't route
-	// traffic to it until it's ready.
 	for _, c := range d.New {
 		upstream.Servers = append(upstream.Servers, provider.Server{Addr: c.Addr})
 	}

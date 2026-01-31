@@ -195,6 +195,8 @@ func renderNginxProxyUpstream(state *UpstreamState) string {
 
 	if state.Affinity == "ip" || state.Affinity == "cookie" {
 		b.WriteString("    ip_hash;\n")
+	} else {
+		b.WriteString("    least_conn;\n")
 	}
 
 	for _, s := range state.Servers {

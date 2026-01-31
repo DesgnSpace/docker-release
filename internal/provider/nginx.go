@@ -68,6 +68,8 @@ func renderUpstream(state *UpstreamState) string {
 
 	if state.Affinity == "ip" || state.Affinity == "cookie" {
 		fmt.Fprintf(&b, "    ip_hash;\n")
+	} else {
+		fmt.Fprintf(&b, "    least_conn;\n")
 	}
 
 	for _, s := range state.Servers {

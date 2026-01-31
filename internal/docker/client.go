@@ -103,7 +103,7 @@ func (c *Client) CreateContainerFromImage(ctx context.Context, ref types.Contain
 	}
 
 	cfg := &container.Config{
-		Image:        ref.Image,
+		Image:        refInfo.Config.Image,
 		Labels:       ref.Labels,
 		Healthcheck:  refInfo.Config.Healthcheck,
 		ExposedPorts: refInfo.Config.ExposedPorts,

@@ -23,6 +23,14 @@ const (
 	ProviderNone       ProviderType = "none"
 )
 
+type HealthCheckConfig struct {
+	Path        string
+	Interval    time.Duration
+	Timeout     time.Duration
+	Retries     int
+	StartPeriod time.Duration
+}
+
 type ServiceConfig struct {
 	Enabled            bool
 	Provider           ProviderType
@@ -34,8 +42,9 @@ type ServiceConfig struct {
 	TraefikConfigDir   string
 	UpstreamName       string
 
-	BlueGreen BlueGreenConfig
-	Canary    CanaryConfig
+	BlueGreen   BlueGreenConfig
+	Canary      CanaryConfig
+	HealthCheck HealthCheckConfig
 }
 
 type BlueGreenConfig struct {
@@ -74,6 +83,14 @@ func ParseLabels(labels map[string]string) (*ServiceConfig, error) {
 			Step:            parseIntOr(labels, "release.canary.step", 20),
 			Interval:        parseDurationOr(labels, "release.canary.interval", 2*time.Minute),
 			Affinity:        getOr(labels, "release.canary.affinity", "ip"),
+		},
+
+		HealthCheck: HealthCheckConfig{
+			Path:        getOr(labels, "release.healthcheck.path", ""),
+			Interval:    parseDurationOr(labels, "release.healthcheck.interval", 5*time.Second),
+			Timeout:     parseDurationOr(labels, "release.healthcheck.timeout", 5*time.Second),
+			Retries:     parseIntOr(labels, "release.healthcheck.retries", 3),
+			StartPeriod: parseDurationOr(labels, "release.healthcheck.start_period", 0),
 		},
 	}
 
