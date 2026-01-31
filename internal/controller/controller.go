@@ -213,6 +213,11 @@ func (c *Controller) deploy(parentCtx context.Context, serviceName string, cfg *
 
 	log.Printf("starting %s deployment for %s", cfg.Strategy, serviceName)
 
+	expected := len(oldContainers)
+	if len(newContainers) < expected {
+		newContainers = c.waitForContainers(ctx, serviceName, newContainers[0].ImageID, expected)
+	}
+
 	prov := c.createProvider(cfg)
 
 	oldInfos, err := c.resolveContainers(ctx, oldContainers)
@@ -325,6 +330,47 @@ func (c *Controller) createStrategy(cfg *config.ServiceConfig, prov provider.Pro
 	default:
 		return strategy.NewLinear(dockerOps, prov, c.stateManager)
 	}
+}
+
+func (c *Controller) waitForContainers(ctx context.Context, serviceName, imageID string, expected int) []types.Container {
+	timeout := 30 * time.Second
+	deadline := time.After(timeout)
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	log.Printf("waiting for %d new container(s) for %s (have fewer)", expected, serviceName)
+
+	for {
+		select {
+		case <-deadline:
+			log.Printf("timed out waiting for %d new containers for %s, proceeding with what's available", expected, serviceName)
+			return c.listContainersByImage(ctx, serviceName, imageID)
+		case <-ctx.Done():
+			return c.listContainersByImage(ctx, serviceName, imageID)
+		case <-ticker.C:
+			found := c.listContainersByImage(ctx, serviceName, imageID)
+			if len(found) >= expected {
+				log.Printf("found %d/%d new container(s) for %s", len(found), expected, serviceName)
+				return found
+			}
+		}
+	}
+}
+
+func (c *Controller) listContainersByImage(ctx context.Context, serviceName, imageID string) []types.Container {
+	containers, err := c.docker.ListManagedContainers(ctx)
+	if err != nil {
+		return nil
+	}
+
+	var matched []types.Container
+	for _, ctr := range containers {
+		if ctr.Labels["com.docker.compose.service"] == serviceName && ctr.ImageID == imageID {
+			matched = append(matched, ctr)
+		}
+	}
+
+	return matched
 }
 
 func (c *Controller) resolveContainers(ctx context.Context, containers []types.Container) ([]strategy.ContainerInfo, error) {
