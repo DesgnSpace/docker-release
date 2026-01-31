@@ -75,6 +75,23 @@ func TestRenderUpstreamWithDrain(t *testing.T) {
 	}
 }
 
+func TestRenderUpstreamCookieAffinityFallsBackToIpHash(t *testing.T) {
+	state := &UpstreamState{
+		Service:  "app",
+		Affinity: "cookie",
+		Servers: []Server{
+			{Addr: "172.18.0.5:80", Weight: 90},
+			{Addr: "172.18.0.8:80", Weight: 10},
+		},
+	}
+
+	got := renderUpstream(state)
+
+	if !strings.Contains(got, "ip_hash;") {
+		t.Error("cookie affinity should fall back to ip_hash for nginx")
+	}
+}
+
 func TestGenerateConfigWritesFile(t *testing.T) {
 	dir := t.TempDir()
 	p := NewNginx(dir, nil, "")

@@ -23,6 +23,24 @@ func main() {
 	switch os.Args[1] {
 	case "watch":
 		run(cmdWatch)
+	case "release":
+		if len(os.Args) < 3 {
+			fmt.Fprintln(os.Stderr, "usage: docker-release release [--force] <service>")
+			os.Exit(1)
+		}
+		force := false
+		service := os.Args[2]
+		if os.Args[2] == "--force" {
+			force = true
+			if len(os.Args) < 4 {
+				fmt.Fprintln(os.Stderr, "usage: docker-release release [--force] <service>")
+				os.Exit(1)
+			}
+			service = os.Args[3]
+		}
+		run(func(ctrl *controller.Controller) error {
+			return ctrl.Release(context.Background(), service, force)
+		})
 	case "rollback":
 		if len(os.Args) < 3 {
 			fmt.Fprintln(os.Stderr, "usage: docker-release rollback <service>")
@@ -58,10 +76,8 @@ func run(fn func(*controller.Controller) error) {
 	}
 	defer dockerClient.Close()
 
-	stateDir := envOr("RELEASE_STATE_DIR", "/var/lib/docker-release")
-	configDir := envOr("RELEASE_CONFIG_DIR", "/etc/docker-release/conf.d")
-	mgr := state.NewManager(stateDir)
-	ctrl := controller.New(dockerClient, mgr, configDir)
+	mgr := state.NewManager("/var/lib/docker-release")
+	ctrl := controller.New(dockerClient, mgr)
 
 	if err := fn(ctrl); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -76,13 +92,6 @@ func cmdWatch(ctrl *controller.Controller) error {
 	return ctrl.Watch(ctx)
 }
 
-func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
-
 func printUsage() {
 	fmt.Printf(`docker-release %s
 Deployment controller for Docker Compose environments.
@@ -92,14 +101,13 @@ Usage:
 
 Commands:
   watch               Start the controller (monitors Docker events, triggers deployments)
+  release [--force] <service>
+                      Trigger a deployment for a service on demand
+                      Use --force to redeploy even when all containers share the same image
   rollback <service>  Roll back a service to the previous deployment
   status [service]    Show current deployment state
   version             Print version
   help                Show this help
-
-Environment:
-  RELEASE_STATE_DIR   Directory for state files (default: /var/lib/docker-release)
-  RELEASE_CONFIG_DIR  Directory for provider config files (default: /etc/docker-release/conf.d)
 
 `, version)
 }

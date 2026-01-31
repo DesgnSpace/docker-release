@@ -16,6 +16,7 @@ func TestParseLabels(t *testing.T) {
 		"release.canary.step":             "10",
 		"release.canary.interval":         "1m",
 		"release.canary.affinity":         "cookie",
+		"release.nginx.container":         "my-nginx",
 	}
 
 	cfg, err := ParseLabels(labels)
@@ -23,6 +24,9 @@ func TestParseLabels(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
+	if cfg.NginxContainer != "my-nginx" {
+		t.Errorf("nginx_container = %s, want my-nginx", cfg.NginxContainer)
+	}
 	if cfg.Provider != ProviderNginxProxy {
 		t.Errorf("provider = %s, want nginx-proxy", cfg.Provider)
 	}
@@ -74,6 +78,9 @@ func TestParseLabelsDefaults(t *testing.T) {
 	if cfg.Canary.Step != 20 {
 		t.Errorf("default step = %d, want 20", cfg.Canary.Step)
 	}
+	if cfg.NginxContainer != "" {
+		t.Errorf("default nginx_container = %s, want empty", cfg.NginxContainer)
+	}
 }
 
 func TestParseLabelsNotEnabled(t *testing.T) {
@@ -108,6 +115,23 @@ func TestParseLabelsInvalidStrategy(t *testing.T) {
 	_, err := ParseLabels(labels)
 	if err == nil {
 		t.Fatal("expected error for unknown strategy")
+	}
+}
+
+func TestParseLabelsNoneProvider(t *testing.T) {
+	labels := map[string]string{
+		"release.enable":   "true",
+		"release.provider": "none",
+		"release.strategy": "linear",
+	}
+
+	cfg, err := ParseLabels(labels)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Provider != ProviderNone {
+		t.Errorf("provider = %s, want none", cfg.Provider)
 	}
 }
 

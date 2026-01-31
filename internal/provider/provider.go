@@ -7,9 +7,17 @@ type Server struct {
 }
 
 type UpstreamState struct {
-	Service   string
-	Servers   []Server
-	Affinity  string // "ip", "cookie", or ""
+	Service      string
+	UpstreamName string // overrides Service for upstream naming (e.g. VIRTUAL_HOST for nginx-proxy)
+	Servers      []Server
+	Affinity     string // "ip", "cookie", or ""
+}
+
+func (u *UpstreamState) ResolveUpstreamName() string {
+	if u.UpstreamName != "" {
+		return u.UpstreamName
+	}
+	return u.Service
 }
 
 type Provider interface {

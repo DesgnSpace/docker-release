@@ -10,6 +10,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 )
 
@@ -78,6 +79,76 @@ func (c *Client) Exec(ctx context.Context, containerID string, cmd []string) err
 	return c.api.ContainerExecStart(ctx, exec.ID, container.ExecStartOptions{})
 }
 
+func (c *Client) FindContainerByService(ctx context.Context, serviceName string) (string, error) {
+	f := filters.NewArgs()
+	f.Add("label", fmt.Sprintf("com.docker.compose.service=%s", serviceName))
+	f.Add("status", "running")
+
+	containers, err := c.api.ContainerList(ctx, container.ListOptions{Filters: f})
+	if err != nil {
+		return "", fmt.Errorf("listing containers: %w", err)
+	}
+
+	if len(containers) == 0 {
+		return "", fmt.Errorf("no running container found for service %q", serviceName)
+	}
+
+	return containers[0].ID, nil
+}
+
+func (c *Client) CreateContainerFromImage(ctx context.Context, ref types.Container) (string, error) {
+	cfg := &container.Config{
+		Image:  ref.Image,
+		Labels: ref.Labels,
+	}
+
+	primaryNet, primaryNetID := primaryNetwork(ref)
+
+	var networkCfg *network.NetworkingConfig
+	if primaryNet != "" {
+		networkCfg = &network.NetworkingConfig{
+			EndpointsConfig: map[string]*network.EndpointSettings{
+				primaryNet: {NetworkID: primaryNetID},
+			},
+		}
+	}
+
+	resp, err := c.api.ContainerCreate(ctx, cfg, nil, networkCfg, nil, "")
+	if err != nil {
+		return "", fmt.Errorf("creating container: %w", err)
+	}
+
+	for name, endpoint := range ref.NetworkSettings.Networks {
+		if name == primaryNet {
+			continue
+		}
+		err := c.api.NetworkConnect(ctx, endpoint.NetworkID, resp.ID, nil)
+		if err != nil {
+			_ = c.api.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true})
+			return "", fmt.Errorf("connecting to network %s: %w", name, err)
+		}
+	}
+
+	if err := c.api.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+		_ = c.api.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true})
+		return "", fmt.Errorf("starting container: %w", err)
+	}
+
+	return resp.ID, nil
+}
+
+func primaryNetwork(ref types.Container) (name string, id string) {
+	if ref.NetworkSettings == nil {
+		return "", ""
+	}
+
+	for n, endpoint := range ref.NetworkSettings.Networks {
+		return n, endpoint.NetworkID
+	}
+
+	return "", ""
+}
+
 func (c *Client) ContainerAddr(ctx context.Context, containerID string) (string, error) {
 	info, err := c.api.ContainerInspect(ctx, containerID)
 	if err != nil {
@@ -119,7 +190,10 @@ func (c *Client) IsHealthy(ctx context.Context, containerID string) (bool, error
 		return true, nil
 	}
 
-	return info.State.Health.Status == "healthy", nil
+	// "starting" means the healthcheck hasn't determined status yet — the
+	// container is running, so treat it as healthy until proven otherwise.
+	// Only an explicit "unhealthy" status should mark a container as down.
+	return info.State.Health.Status != "unhealthy", nil
 }
 
 func (c *Client) RestartCount(ctx context.Context, containerID string) (int, error) {

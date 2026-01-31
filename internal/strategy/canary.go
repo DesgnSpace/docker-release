@@ -27,10 +27,18 @@ func NewCanary(docker DockerOps, prov provider.Provider, stateMgr *state.Manager
 func (c *Canary) Execute(ctx context.Context, d *Deployment) error {
 	log.Printf("[canary] starting deployment for %s: %d stable, %d canary", d.Service, len(d.Old), len(d.New))
 
+	prev, _ := c.state.Load(d.Service)
+	prevDeployID := ""
+	if prev != nil {
+		prevDeployID = prev.ActiveDeploymentID
+	}
+
 	ds := &state.DeploymentState{
-		Service:  d.Service,
-		Status:   state.StatusInProgress,
-		Strategy: "canary",
+		Service:              d.Service,
+		Status:               state.StatusInProgress,
+		Strategy:             "canary",
+		ActiveDeploymentID:   state.GenerateDeploymentID(),
+		PreviousDeploymentID: prevDeployID,
 		Containers: state.Containers{
 			Stable: containerIDs(d.Old),
 			Canary: containerIDs(d.New),
@@ -88,7 +96,7 @@ func (c *Canary) Execute(ctx context.Context, d *Deployment) error {
 
 	log.Printf("[canary] promoting canary to 100%%")
 
-	finalUpstream := &provider.UpstreamState{Service: d.Service}
+	finalUpstream := &provider.UpstreamState{Service: d.Service, UpstreamName: d.UpstreamName()}
 	for _, cn := range d.New {
 		finalUpstream.Servers = append(finalUpstream.Servers, provider.Server{Addr: cn.Addr})
 	}
@@ -134,7 +142,7 @@ func (c *Canary) Execute(ctx context.Context, d *Deployment) error {
 func (c *Canary) Rollback(ctx context.Context, d *Deployment) error {
 	log.Printf("[canary] rolling back %s", d.Service)
 
-	upstream := &provider.UpstreamState{Service: d.Service}
+	upstream := &provider.UpstreamState{Service: d.Service, UpstreamName: d.UpstreamName()}
 	for _, old := range d.Old {
 		upstream.Servers = append(upstream.Servers, provider.Server{Addr: old.Addr})
 	}
@@ -177,8 +185,9 @@ func buildCanaryUpstream(d *Deployment, canaryWeight int) *provider.UpstreamStat
 	affinity := d.Config.Canary.Affinity
 
 	upstream := &provider.UpstreamState{
-		Service:  d.Service,
-		Affinity: affinity,
+		Service:      d.Service,
+		UpstreamName: d.UpstreamName(),
+		Affinity:     affinity,
 	}
 
 	for _, old := range d.Old {

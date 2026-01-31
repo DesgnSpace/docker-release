@@ -1,10 +1,13 @@
 package state
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 type Status string
@@ -80,6 +83,12 @@ func (m *Manager) Save(s *DeploymentState) error {
 	}
 
 	return nil
+}
+
+func GenerateDeploymentID() string {
+	b := make([]byte, 4)
+	rand.Read(b)
+	return fmt.Sprintf("deploy_%s_%s", time.Now().Format("20060102150405"), hex.EncodeToString(b))
 }
 
 func (m *Manager) path(service string) string {

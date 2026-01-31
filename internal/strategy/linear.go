@@ -33,10 +33,18 @@ func NewLinear(docker DockerOps, prov provider.Provider, stateMgr *state.Manager
 func (l *Linear) Execute(ctx context.Context, d *Deployment) error {
 	log.Printf("[linear] starting deployment for %s: %d old → %d new", d.Service, len(d.Old), len(d.New))
 
+	prev, _ := l.state.Load(d.Service)
+	prevDeployID := ""
+	if prev != nil {
+		prevDeployID = prev.ActiveDeploymentID
+	}
+
 	ds := &state.DeploymentState{
-		Service:  d.Service,
-		Status:   state.StatusInProgress,
-		Strategy: "linear",
+		Service:              d.Service,
+		Status:               state.StatusInProgress,
+		Strategy:             "linear",
+		ActiveDeploymentID:   state.GenerateDeploymentID(),
+		PreviousDeploymentID: prevDeployID,
 		Containers: state.Containers{
 			Stable: containerIDs(d.Old),
 		},
@@ -129,7 +137,8 @@ func (l *Linear) Rollback(ctx context.Context, d *Deployment) error {
 	log.Printf("[linear] rolling back %s", d.Service)
 
 	upstream := &provider.UpstreamState{
-		Service: d.Service,
+		Service:      d.Service,
+		UpstreamName: d.UpstreamName(),
 	}
 
 	for _, c := range d.Old {
@@ -170,7 +179,7 @@ func (l *Linear) Rollback(ctx context.Context, d *Deployment) error {
 }
 
 func (l *Linear) buildUpstream(d *Deployment, step int) *provider.UpstreamState {
-	upstream := &provider.UpstreamState{Service: d.Service}
+	upstream := &provider.UpstreamState{Service: d.Service, UpstreamName: d.UpstreamName()}
 
 	for j := 0; j <= step; j++ {
 		upstream.Servers = append(upstream.Servers, provider.Server{Addr: d.New[j].Addr})
@@ -189,7 +198,7 @@ func (l *Linear) buildUpstream(d *Deployment, step int) *provider.UpstreamState 
 }
 
 func (l *Linear) buildFinalUpstream(d *Deployment) *provider.UpstreamState {
-	upstream := &provider.UpstreamState{Service: d.Service}
+	upstream := &provider.UpstreamState{Service: d.Service, UpstreamName: d.UpstreamName()}
 
 	for _, c := range d.New {
 		upstream.Servers = append(upstream.Servers, provider.Server{Addr: c.Addr})

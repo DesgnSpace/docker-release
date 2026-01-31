@@ -18,6 +18,7 @@ type HealthChecker interface {
 type HealthMonitor struct {
 	checker          HealthChecker
 	interval         time.Duration
+	gracePeriod      time.Duration
 	maxRestarts      int
 	containerIDs     []string
 	initialRestarts  map[string]int
@@ -43,7 +44,20 @@ func (m *HealthMonitor) SetMaxRestarts(n int) {
 	m.maxRestarts = n
 }
 
+func (m *HealthMonitor) SetGracePeriod(d time.Duration) {
+	m.gracePeriod = d
+}
+
 func (m *HealthMonitor) Run(ctx context.Context) error {
+	if m.gracePeriod > 0 {
+		log.Printf("[monitor] waiting %s grace period before health checks", m.gracePeriod)
+		select {
+		case <-time.After(m.gracePeriod):
+		case <-ctx.Done():
+			return nil
+		}
+	}
+
 	for _, id := range m.containerIDs {
 		count, err := m.checker.RestartCount(ctx, id)
 		if err != nil {

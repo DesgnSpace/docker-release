@@ -6,8 +6,6 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - nginx-tmpl:/shared/nginx-tmpl:rw
-    environment:
-      - RELEASE_STATE_DIR=/var/lib/docker-release
     command: ["watch"]
 
   nginx-proxy:
@@ -33,6 +31,8 @@ services:
       - "release.canary.step=25"
       - "release.canary.interval=30s"
       - "release.canary.affinity=cookie"
+      - "release.nginx.config_dir=/shared/nginx-tmpl"
+      - "release.upstream=app.local"
     environment:
       - VIRTUAL_HOST=app.local
     healthcheck:

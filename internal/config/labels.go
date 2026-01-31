@@ -20,6 +20,7 @@ const (
 	ProviderNginxProxy ProviderType = "nginx-proxy"
 	ProviderNginx      ProviderType = "nginx"
 	ProviderTraefik    ProviderType = "traefik"
+	ProviderNone       ProviderType = "none"
 )
 
 type ServiceConfig struct {
@@ -28,6 +29,10 @@ type ServiceConfig struct {
 	Strategy           Strategy
 	HealthCheckTimeout time.Duration
 	DrainTimeout       time.Duration
+	NginxContainer     string
+	NginxConfigDir     string
+	TraefikConfigDir   string
+	UpstreamName       string
 
 	BlueGreen BlueGreenConfig
 	Canary    CanaryConfig
@@ -55,6 +60,10 @@ func ParseLabels(labels map[string]string) (*ServiceConfig, error) {
 		Strategy:           Strategy(getOr(labels, "release.strategy", "linear")),
 		HealthCheckTimeout: parseDurationOr(labels, "release.health_check_timeout", 60*time.Second),
 		DrainTimeout:       parseDurationOr(labels, "release.drain_timeout", 10*time.Second),
+		NginxContainer:     getOr(labels, "release.nginx.container", ""),
+		NginxConfigDir:     getOr(labels, "release.nginx.config_dir", ""),
+		TraefikConfigDir:   getOr(labels, "release.traefik.config_dir", ""),
+		UpstreamName:       getOr(labels, "release.upstream", ""),
 
 		BlueGreen: BlueGreenConfig{
 			SoakTime: parseDurationOr(labels, "release.bg.soak_time", 5*time.Minute),
@@ -77,7 +86,7 @@ func ParseLabels(labels map[string]string) (*ServiceConfig, error) {
 
 func (c *ServiceConfig) validate() error {
 	switch c.Provider {
-	case ProviderNginxProxy, ProviderNginx, ProviderTraefik:
+	case ProviderNginxProxy, ProviderNginx, ProviderTraefik, ProviderNone:
 	default:
 		return fmt.Errorf("unknown provider: %s", c.Provider)
 	}

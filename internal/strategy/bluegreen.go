@@ -27,10 +27,18 @@ func NewBlueGreen(docker DockerOps, prov provider.Provider, stateMgr *state.Mana
 func (bg *BlueGreen) Execute(ctx context.Context, d *Deployment) error {
 	log.Printf("[blue-green] starting deployment for %s: %d old (blue) → %d new (green)", d.Service, len(d.Old), len(d.New))
 
+	prev, _ := bg.state.Load(d.Service)
+	prevDeployID := ""
+	if prev != nil {
+		prevDeployID = prev.ActiveDeploymentID
+	}
+
 	ds := &state.DeploymentState{
-		Service:  d.Service,
-		Status:   state.StatusInProgress,
-		Strategy: "blue-green",
+		Service:              d.Service,
+		Status:               state.StatusInProgress,
+		Strategy:             "blue-green",
+		ActiveDeploymentID:   state.GenerateDeploymentID(),
+		PreviousDeploymentID: prevDeployID,
 		Containers: state.Containers{
 			Stable: containerIDs(d.Old),
 			Canary: containerIDs(d.New),
@@ -50,7 +58,7 @@ func (bg *BlueGreen) Execute(ctx context.Context, d *Deployment) error {
 
 	log.Printf("[blue-green] all green containers healthy, switching traffic")
 
-	upstream := &provider.UpstreamState{Service: d.Service}
+	upstream := &provider.UpstreamState{Service: d.Service, UpstreamName: d.UpstreamName()}
 	for _, c := range d.New {
 		upstream.Servers = append(upstream.Servers, provider.Server{Addr: c.Addr})
 	}
@@ -103,7 +111,7 @@ func (bg *BlueGreen) Execute(ctx context.Context, d *Deployment) error {
 func (bg *BlueGreen) Rollback(ctx context.Context, d *Deployment) error {
 	log.Printf("[blue-green] rolling back %s to blue", d.Service)
 
-	upstream := &provider.UpstreamState{Service: d.Service}
+	upstream := &provider.UpstreamState{Service: d.Service, UpstreamName: d.UpstreamName()}
 	for _, c := range d.Old {
 		upstream.Servers = append(upstream.Servers, provider.Server{Addr: c.Addr})
 	}

@@ -88,6 +88,23 @@ func TestSaveAtomic(t *testing.T) {
 	}
 }
 
+func TestGenerateDeploymentID(t *testing.T) {
+	id1 := GenerateDeploymentID()
+	id2 := GenerateDeploymentID()
+
+	if id1 == "" {
+		t.Error("deployment ID should not be empty")
+	}
+
+	if !testing.Short() && id1 == id2 {
+		t.Error("deployment IDs should be unique")
+	}
+
+	if len(id1) < 20 {
+		t.Errorf("deployment ID too short: %s", id1)
+	}
+}
+
 func TestSaveCreatesDir(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "nested", "state")
 	mgr := NewManager(dir)
