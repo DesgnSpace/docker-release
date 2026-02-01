@@ -11,6 +11,7 @@ type UpstreamState struct {
 	UpstreamName string // overrides Service for upstream naming (e.g. VIRTUAL_HOST for nginx-proxy)
 	Servers      []Server
 	Affinity     string // "ip", "cookie", or ""
+	Keepalive    int    // 0 disables keepalive
 }
 
 func (u *UpstreamState) ResolveUpstreamName() string {

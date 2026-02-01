@@ -39,6 +39,7 @@ type ServiceConfig struct {
 	DrainTimeout       time.Duration
 	NginxContainer     string
 	NginxConfigDir     string
+	NginxKeepalive     int
 	TraefikConfigDir   string
 	UpstreamName       string
 
@@ -71,6 +72,7 @@ func ParseLabels(labels map[string]string) (*ServiceConfig, error) {
 		DrainTimeout:       parseDurationOr(labels, "release.drain_timeout", 10*time.Second),
 		NginxContainer:     getOr(labels, "release.nginx.container", ""),
 		NginxConfigDir:     getOr(labels, "release.nginx.config_dir", ""),
+		NginxKeepalive:     parseIntOr(labels, "release.nginx.keepalive", -1),
 		TraefikConfigDir:   getOr(labels, "release.traefik.config_dir", ""),
 		UpstreamName:       getOr(labels, "release.upstream", ""),
 
@@ -122,7 +124,23 @@ func (c *ServiceConfig) validate() error {
 		return fmt.Errorf("canary.step must be 1-100, got %d", c.Canary.Step)
 	}
 
+	if c.NginxKeepalive < -1 {
+		return fmt.Errorf("nginx.keepalive must be >= 0, got %d", c.NginxKeepalive)
+	}
+
 	return nil
+}
+
+func (c *ServiceConfig) ResolveNginxKeepalive(serverCount int) int {
+	if c.NginxKeepalive >= 0 {
+		return c.NginxKeepalive
+	}
+
+	if serverCount <= 0 {
+		return 0
+	}
+
+	return serverCount + 1
 }
 
 func getOr(labels map[string]string, key, fallback string) string {

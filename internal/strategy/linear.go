@@ -71,6 +71,7 @@ func (l *Linear) Execute(ctx context.Context, d *Deployment) error {
 		}
 
 		upstream := l.buildUpstream(d, i)
+		applyNginxKeepalive(d, upstream)
 		if err := l.provider.GenerateConfig(upstream); err != nil {
 			return fmt.Errorf("generating config: %w", err)
 		}
@@ -111,15 +112,16 @@ func (l *Linear) Execute(ctx context.Context, d *Deployment) error {
 				return fmt.Errorf("health check failed for %s: %w", d.New[i].ID[:12], err)
 			}
 		}
+	}
 
-		upstream := l.buildFinalUpstream(d)
-		if err := l.provider.GenerateConfig(upstream); err != nil {
-			return fmt.Errorf("generating final config: %w", err)
-		}
+	upstream := l.buildFinalUpstream(d)
+	applyNginxKeepalive(d, upstream)
+	if err := l.provider.GenerateConfig(upstream); err != nil {
+		return fmt.Errorf("generating final config: %w", err)
+	}
 
-		if err := l.provider.Reload(); err != nil {
-			return fmt.Errorf("reloading provider: %w", err)
-		}
+	if err := l.provider.Reload(); err != nil {
+		return fmt.Errorf("reloading provider: %w", err)
 	}
 
 	ds.Status = state.StatusIdle
@@ -144,6 +146,7 @@ func (l *Linear) Rollback(ctx context.Context, d *Deployment) error {
 	for _, c := range d.Old {
 		upstream.Servers = append(upstream.Servers, provider.Server{Addr: c.Addr})
 	}
+	applyNginxKeepalive(d, upstream)
 
 	if err := l.provider.GenerateConfig(upstream); err != nil {
 		return fmt.Errorf("generating rollback config: %w", err)

@@ -65,6 +65,7 @@ func (bg *BlueGreen) Execute(ctx context.Context, d *Deployment) error {
 	for _, c := range d.New {
 		upstream.Servers = append(upstream.Servers, provider.Server{Addr: c.Addr})
 	}
+	applyNginxKeepalive(d, upstream)
 
 	if err := bg.provider.GenerateConfig(upstream); err != nil {
 		return fmt.Errorf("generating mixed config: %w", err)
@@ -94,6 +95,7 @@ func (bg *BlueGreen) Execute(ctx context.Context, d *Deployment) error {
 	for _, c := range d.New {
 		finalUpstream.Servers = append(finalUpstream.Servers, provider.Server{Addr: c.Addr})
 	}
+	applyNginxKeepalive(d, finalUpstream)
 
 	if err := bg.provider.GenerateConfig(finalUpstream); err != nil {
 		return fmt.Errorf("generating green config: %w", err)
@@ -146,6 +148,7 @@ func (bg *BlueGreen) Rollback(ctx context.Context, d *Deployment) error {
 	for _, c := range d.Old {
 		upstream.Servers = append(upstream.Servers, provider.Server{Addr: c.Addr})
 	}
+	applyNginxKeepalive(d, upstream)
 
 	if err := bg.provider.GenerateConfig(upstream); err != nil {
 		return fmt.Errorf("generating rollback config: %w", err)

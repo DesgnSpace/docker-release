@@ -132,6 +132,33 @@ func TestNginxProxyWithDrain(t *testing.T) {
 	}
 }
 
+func TestNginxProxyKeepalive(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "nginx.tmpl")
+	os.WriteFile(path, []byte(stockTemplate), 0o644)
+
+	p := NewNginxProxyFromString(path, stockTemplate)
+
+	state := &UpstreamState{
+		Service:   "app",
+		Keepalive: 7,
+		Servers: []Server{
+			{Addr: "172.18.0.5:80"},
+		},
+	}
+
+	if err := p.GenerateConfig(state); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+
+	data, _ := os.ReadFile(path)
+	content := string(data)
+
+	if !strings.Contains(content, "keepalive 7;") {
+		t.Error("missing keepalive directive")
+	}
+}
+
 func TestNginxProxyMultipleServices(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "nginx.tmpl")

@@ -17,6 +17,7 @@ func TestParseLabels(t *testing.T) {
 		"release.canary.interval":         "1m",
 		"release.canary.affinity":         "cookie",
 		"release.nginx.container":         "my-nginx",
+		"release.nginx.keepalive":         "20",
 	}
 
 	cfg, err := ParseLabels(labels)
@@ -51,6 +52,9 @@ func TestParseLabels(t *testing.T) {
 	if cfg.Canary.Affinity != "cookie" {
 		t.Errorf("affinity = %s, want cookie", cfg.Canary.Affinity)
 	}
+	if cfg.NginxKeepalive != 20 {
+		t.Errorf("nginx.keepalive = %d, want 20", cfg.NginxKeepalive)
+	}
 }
 
 func TestParseLabelsDefaults(t *testing.T) {
@@ -80,6 +84,9 @@ func TestParseLabelsDefaults(t *testing.T) {
 	}
 	if cfg.NginxContainer != "" {
 		t.Errorf("default nginx_container = %s, want empty", cfg.NginxContainer)
+	}
+	if cfg.NginxKeepalive != -1 {
+		t.Errorf("default nginx_keepalive = %d, want -1", cfg.NginxKeepalive)
 	}
 }
 

@@ -97,6 +97,22 @@ func TestRenderUpstreamWithDrain(t *testing.T) {
 	}
 }
 
+func TestRenderUpstreamKeepalive(t *testing.T) {
+	state := &UpstreamState{
+		Service:   "app",
+		Keepalive: 5,
+		Servers: []Server{
+			{Addr: "172.18.0.5:80"},
+		},
+	}
+
+	got := renderUpstream(state)
+
+	if !strings.Contains(got, "keepalive 5;") {
+		t.Error("missing keepalive directive")
+	}
+}
+
 func TestRenderUpstreamCookieAffinityFallsBackToIpHash(t *testing.T) {
 	state := &UpstreamState{
 		Service:  "app",

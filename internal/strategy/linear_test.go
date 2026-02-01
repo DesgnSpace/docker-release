@@ -35,9 +35,9 @@ func (m *mockDocker) Remove(_ context.Context, containerID string) error {
 }
 
 type mockProvider struct {
-	configs  []*provider.UpstreamState
-	reloads  int
-	genErr   error
+	configs   []*provider.UpstreamState
+	reloads   int
+	genErr    error
 	reloadErr error
 }
 
@@ -101,12 +101,12 @@ func TestLinearExecuteBasic(t *testing.T) {
 		t.Errorf("expected 2 removes, got %d", len(docker.removeCalls))
 	}
 
-	if len(prov.configs) != 2 {
-		t.Errorf("expected 2 config generations, got %d", len(prov.configs))
+	if len(prov.configs) != 3 {
+		t.Errorf("expected 3 config generations, got %d", len(prov.configs))
 	}
 
-	if prov.reloads != 2 {
-		t.Errorf("expected 2 reloads, got %d", prov.reloads)
+	if prov.reloads != 3 {
+		t.Errorf("expected 3 reloads, got %d", prov.reloads)
 	}
 
 	for i, id := range docker.stopCalls {
@@ -152,8 +152,8 @@ func TestLinearConfigAtEachStep(t *testing.T) {
 		t.Fatalf("execute: %v", err)
 	}
 
-	if len(prov.configs) != 2 {
-		t.Fatalf("expected 2 configs, got %d", len(prov.configs))
+	if len(prov.configs) != 3 {
+		t.Fatalf("expected 3 configs, got %d", len(prov.configs))
 	}
 
 	cfg0 := prov.configs[0]
@@ -192,6 +192,13 @@ func TestLinearConfigAtEachStep(t *testing.T) {
 	}
 	if !hasNew {
 		t.Error("step 1: new[1] should be in upstream")
+	}
+
+	cfg2 := prov.configs[2]
+	for _, s := range cfg2.Servers {
+		if s.Down {
+			t.Error("final config should not have down servers")
+		}
 	}
 }
 

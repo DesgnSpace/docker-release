@@ -84,6 +84,10 @@ func renderUpstream(state *UpstreamState) string {
 		fmt.Fprintf(&b, ";\n")
 	}
 
+	if state.Keepalive > 0 {
+		fmt.Fprintf(&b, "    keepalive %d;\n", state.Keepalive)
+	}
+
 	fmt.Fprintf(&b, "}\n")
 
 	return b.String()

@@ -100,6 +100,7 @@ func (c *Canary) Execute(ctx context.Context, d *Deployment) error {
 	for _, cn := range d.New {
 		finalUpstream.Servers = append(finalUpstream.Servers, provider.Server{Addr: cn.Addr})
 	}
+	applyNginxKeepalive(d, finalUpstream)
 
 	if err := c.provider.GenerateConfig(finalUpstream); err != nil {
 		return fmt.Errorf("generating final config: %w", err)
@@ -146,6 +147,7 @@ func (c *Canary) Rollback(ctx context.Context, d *Deployment) error {
 	for _, old := range d.Old {
 		upstream.Servers = append(upstream.Servers, provider.Server{Addr: old.Addr})
 	}
+	applyNginxKeepalive(d, upstream)
 
 	if err := c.provider.GenerateConfig(upstream); err != nil {
 		return fmt.Errorf("generating rollback config: %w", err)
@@ -203,6 +205,7 @@ func buildCanaryUpstream(d *Deployment, canaryWeight int) *provider.UpstreamStat
 			Weight: canaryWeight,
 		})
 	}
+	applyNginxKeepalive(d, upstream)
 
 	return upstream
 }

@@ -66,10 +66,10 @@ func (c *Controller) Watch(ctx context.Context) error {
 		select {
 		case msg := <-msgCh:
 			switch msg.Action {
-			case "start":
+			case "create", "start":
 				c.handleStart(ctx, msg.Actor.ID, msg.Actor.Attributes)
-			case "die":
-				c.handleDie(msg.Actor.ID, msg.Actor.Attributes)
+			case "die", "stop", "destroy":
+				c.handleDie(ctx, msg.Actor.ID, msg.Actor.Attributes)
 			case "health_status: healthy", "health_status: unhealthy":
 				c.handleHealthStatus(ctx, msg.Actor.ID, msg.Actor.Attributes)
 			}
@@ -86,9 +86,10 @@ func (c *Controller) Watch(ctx context.Context) error {
 	}
 }
 
-func (c *Controller) handleDie(containerID string, attrs map[string]string) {
-	serviceName := attrs["com.docker.compose.service"]
+func (c *Controller) handleDie(ctx context.Context, containerID string, attrs map[string]string) {
+	serviceName := c.serviceFromEvent(ctx, containerID, attrs)
 	if serviceName == "" {
+		c.refreshAllConfigs(ctx)
 		return
 	}
 
@@ -104,10 +105,13 @@ func (c *Controller) handleDie(containerID string, attrs map[string]string) {
 	}
 
 	log.Printf("container %s died (service=%s, exit=%s)", containerID[:12], serviceName, exitCode)
+
+	c.refreshServiceConfig(ctx, serviceName)
+	c.refreshServiceConfigAfter(ctx, serviceName, 2*time.Second)
 }
 
 func (c *Controller) handleStart(ctx context.Context, containerID string, attrs map[string]string) {
-	serviceName := attrs["com.docker.compose.service"]
+	serviceName := c.serviceFromEvent(ctx, containerID, attrs)
 	if serviceName == "" {
 		return
 	}
@@ -120,44 +124,27 @@ func (c *Controller) handleStart(ctx context.Context, containerID string, attrs 
 		return
 	}
 
-	var serviceContainers []types.Container
-	for _, ctr := range containers {
-		if ctr.Labels["com.docker.compose.service"] == serviceName {
-			serviceContainers = append(serviceContainers, ctr)
-		}
-	}
+	serviceContainers := filterServiceContainers(containers, serviceName)
 
 	if len(serviceContainers) < 2 {
+		c.refreshServiceConfig(ctx, serviceName)
+		c.refreshServiceConfigAfter(ctx, serviceName, 2*time.Second)
 		return
 	}
 
-	var old, new []types.Container
-	images := make(map[string][]types.Container)
-	for _, ctr := range serviceContainers {
-		images[ctr.ImageID] = append(images[ctr.ImageID], ctr)
-	}
+	images := groupByImageID(serviceContainers)
 
 	if len(images) < 2 {
+		c.refreshServiceConfig(ctx, serviceName)
+		c.refreshServiceConfigAfter(ctx, serviceName, 2*time.Second)
 		return
 	}
 
-	for _, ctrs := range images {
-		isNew := false
-		for _, ctr := range ctrs {
-			if ctr.ID == containerID {
-				isNew = true
-				break
-			}
-		}
-
-		if isNew {
-			new = ctrs
-		} else {
-			old = append(old, ctrs...)
-		}
-	}
+	old, new := separateOldAndNew(images, containerID)
 
 	if len(old) == 0 || len(new) == 0 {
+		c.refreshServiceConfig(ctx, serviceName)
+		c.refreshServiceConfigAfter(ctx, serviceName, 2*time.Second)
 		return
 	}
 
@@ -363,12 +350,8 @@ func (c *Controller) listContainersByImage(ctx context.Context, serviceName, ima
 		return nil
 	}
 
-	var matched []types.Container
-	for _, ctr := range containers {
-		if ctr.Labels["com.docker.compose.service"] == serviceName && ctr.ImageID == imageID {
-			matched = append(matched, ctr)
-		}
-	}
+	serviceContainers := filterServiceContainers(containers, serviceName)
+	matched := filterByImageID(serviceContainers, imageID)
 
 	return matched
 }
@@ -407,12 +390,7 @@ func (c *Controller) Release(ctx context.Context, service string, force bool) er
 		return fmt.Errorf("listing containers: %w", err)
 	}
 
-	var serviceContainers []types.Container
-	for _, ctr := range containers {
-		if ctr.Labels["com.docker.compose.service"] == service {
-			serviceContainers = append(serviceContainers, ctr)
-		}
-	}
+	serviceContainers := filterServiceContainers(containers, service)
 
 	if len(serviceContainers) == 0 {
 		return fmt.Errorf("no managed containers found for service %q", service)
@@ -423,10 +401,7 @@ func (c *Controller) Release(ctx context.Context, service string, force bool) er
 		return fmt.Errorf("parsing labels: %w", err)
 	}
 
-	images := make(map[string][]types.Container)
-	for _, ctr := range serviceContainers {
-		images[ctr.ImageID] = append(images[ctr.ImageID], ctr)
-	}
+	images := groupByImageID(serviceContainers)
 
 	if len(images) >= 2 {
 		oldContainers, newContainers := splitByImage(serviceContainers, images)
@@ -518,6 +493,82 @@ func splitByImage(containers []types.Container, images map[string][]types.Contai
 	return old, new
 }
 
+func filterServiceContainers(containers []types.Container, serviceName string) []types.Container {
+	var matched []types.Container
+	for _, container := range containers {
+		if container.Labels["com.docker.compose.service"] == serviceName {
+			matched = append(matched, container)
+		}
+	}
+
+	return matched
+}
+
+func (c *Controller) serviceFromEvent(ctx context.Context, containerID string, attrs map[string]string) string {
+	serviceName := attrs["com.docker.compose.service"]
+	if serviceName != "" {
+		return serviceName
+	}
+
+	info, err := c.docker.Inspect(ctx, containerID)
+	if err != nil {
+		return ""
+	}
+
+	if info.Config == nil {
+		return ""
+	}
+
+	if info.Config.Labels == nil {
+		return ""
+	}
+
+	return info.Config.Labels["com.docker.compose.service"]
+}
+
+func filterByImageID(containers []types.Container, imageID string) []types.Container {
+	var matched []types.Container
+	for _, container := range containers {
+		if container.ImageID == imageID {
+			matched = append(matched, container)
+		}
+	}
+
+	return matched
+}
+
+func groupByImageID(containers []types.Container) map[string][]types.Container {
+	grouped := make(map[string][]types.Container)
+	for _, container := range containers {
+		grouped[container.ImageID] = append(grouped[container.ImageID], container)
+	}
+
+	return grouped
+}
+
+func separateOldAndNew(images map[string][]types.Container, newContainerID string) (oldContainers []types.Container, newContainers []types.Container) {
+	for _, containers := range images {
+		if containsContainer(containers, newContainerID) {
+			newContainers = containers
+			continue
+		}
+
+		oldContainers = append(oldContainers, containers...)
+	}
+
+	return oldContainers, newContainers
+}
+
+func containsContainer(containers []types.Container, targetID string) bool {
+	for _, container := range containers {
+		if container.ID == targetID {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (c *Controller) Rollback(ctx context.Context, service string) error {
 	coord := rollback.NewCoordinator(c.stateManager, c.docker)
 
@@ -526,7 +577,6 @@ func (c *Controller) Rollback(ctx context.Context, service string) error {
 	coord.RegisterStrategy("linear", strategy.NewLinear(c.docker, prov, c.stateManager))
 	coord.RegisterStrategy("blue-green", strategy.NewBlueGreen(c.docker, prov, c.stateManager))
 	coord.RegisterStrategy("canary", strategy.NewCanary(c.docker, prov, c.stateManager))
-
 
 	return coord.Execute(ctx, service)
 }
@@ -757,6 +807,10 @@ func (c *Controller) generateServiceConfig(ctx context.Context, name string, cfg
 		return
 	}
 
+	if cfg.Provider == config.ProviderNginx || cfg.Provider == config.ProviderNginxProxy {
+		upstream.Keepalive = cfg.ResolveNginxKeepalive(len(upstream.Servers))
+	}
+
 	if err := prov.GenerateConfig(upstream); err != nil {
 		log.Printf("error generating config for %s: %v", name, err)
 		return
@@ -778,34 +832,21 @@ func (c *Controller) generateServiceConfig(ctx context.Context, name string, cfg
 }
 
 func (c *Controller) refreshServiceConfig(ctx context.Context, serviceName string) {
-	c.mu.Lock()
-	_, deploying := c.deployments[serviceName]
-	c.mu.Unlock()
-
-	if deploying {
-		return
-	}
-
-	ds, err := c.stateManager.Load(serviceName)
-	if err == nil && ds.Status == state.StatusInProgress && !ds.IsStale(state.DefaultStaleThreshold) {
-		log.Printf("deployment in progress for %s (from another process), skipping config refresh", serviceName)
-		return
-	}
-
 	containers, err := c.docker.ListManagedContainers(ctx)
 	if err != nil {
 		log.Printf("error listing containers: %v", err)
 		return
 	}
 
-	var serviceContainers []types.Container
-	for _, ctr := range containers {
-		if ctr.Labels["com.docker.compose.service"] == serviceName {
-			serviceContainers = append(serviceContainers, ctr)
-		}
-	}
+	serviceContainers := filterServiceContainers(containers, serviceName)
 
 	if len(serviceContainers) == 0 {
+		c.refreshAllConfigs(ctx)
+		return
+	}
+
+	imageCount := countImageIDs(serviceContainers)
+	if c.shouldSkipRefresh(serviceName, imageCount) {
 		return
 	}
 
@@ -818,8 +859,88 @@ func (c *Controller) refreshServiceConfig(ctx context.Context, serviceName strin
 	c.generateServiceConfig(ctx, serviceName, cfg, serviceContainers, true)
 }
 
+func (c *Controller) refreshServiceConfigAfter(ctx context.Context, serviceName string, delay time.Duration) {
+	go func() {
+		select {
+		case <-time.After(delay):
+		case <-ctx.Done():
+			return
+		}
+
+		c.refreshServiceConfig(ctx, serviceName)
+	}()
+}
+
+func (c *Controller) refreshAllConfigs(ctx context.Context) {
+	containers, err := c.docker.ListManagedContainers(ctx)
+	if err != nil {
+		log.Printf("error listing containers: %v", err)
+		return
+	}
+
+	services := make(map[string][]types.Container)
+	for _, ctr := range containers {
+		name := ctr.Labels["com.docker.compose.service"]
+		if name == "" {
+			continue
+		}
+		services[name] = append(services[name], ctr)
+	}
+
+	activeConfigs := make(map[string]*config.ServiceConfig)
+	for name, serviceContainers := range services {
+		if len(serviceContainers) == 0 {
+			continue
+		}
+
+		cfg, err := config.ParseLabels(serviceContainers[0].Labels)
+		if err != nil {
+			log.Printf("error parsing labels for %s: %v", name, err)
+			continue
+		}
+
+		activeConfigs[name] = cfg
+	}
+
+	c.cleanStaleConfigs(activeConfigs)
+
+	for name, cfg := range activeConfigs {
+		imageCount := countImageIDs(services[name])
+		if c.shouldSkipRefresh(name, imageCount) {
+			continue
+		}
+		c.generateServiceConfig(ctx, name, cfg, services[name], true)
+	}
+}
+
+func (c *Controller) shouldSkipRefresh(serviceName string, imageCount int) bool {
+	c.mu.Lock()
+	_, deploying := c.deployments[serviceName]
+	c.mu.Unlock()
+
+	if deploying {
+		return true
+	}
+
+	ds, err := c.stateManager.Load(serviceName)
+	if err == nil && ds.Status == state.StatusInProgress && !ds.IsStale(state.DefaultStaleThreshold) && imageCount > 1 {
+		log.Printf("deployment in progress for %s (from another process), skipping config refresh", serviceName)
+		return true
+	}
+
+	return false
+}
+
+func countImageIDs(containers []types.Container) int {
+	imageIDs := make(map[string]bool)
+	for _, container := range containers {
+		imageIDs[container.ImageID] = true
+	}
+	return len(imageIDs)
+}
+
 func (c *Controller) handleHealthStatus(ctx context.Context, containerID string, attrs map[string]string) {
-	serviceName := attrs["com.docker.compose.service"]
+	serviceName := c.serviceFromEvent(ctx, containerID, attrs)
 	if serviceName == "" {
 		return
 	}

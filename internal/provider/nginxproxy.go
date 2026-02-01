@@ -112,7 +112,7 @@ func extractUpstreamBlock(tmpl string) string {
 		"{{- block ", "{{ block ",
 	}
 
-	endTags := []string{"{{- end }}", "{{ end }}", "{{- end}}",  "{{ end}}"}
+	endTags := []string{"{{- end }}", "{{ end }}", "{{- end}}", "{{ end}}"}
 
 	for i := searchFrom; i < len(tmpl); i++ {
 		remaining := tmpl[i:]
@@ -209,6 +209,10 @@ func renderNginxProxyUpstream(state *UpstreamState) string {
 		}
 
 		b.WriteString(";\n")
+	}
+
+	if state.Keepalive > 0 {
+		fmt.Fprintf(&b, "    keepalive %d;\n", state.Keepalive)
 	}
 
 	b.WriteString("}\n")

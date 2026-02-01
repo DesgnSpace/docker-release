@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/malico/docker-release/internal/config"
+	"github.com/malico/docker-release/internal/provider"
 )
 
 type ContainerInfo struct {
@@ -23,6 +24,18 @@ func (d *Deployment) UpstreamName() string {
 		return d.Config.UpstreamName
 	}
 	return d.Service
+}
+
+func applyNginxKeepalive(d *Deployment, upstream *provider.UpstreamState) {
+	if d == nil || d.Config == nil || upstream == nil {
+		return
+	}
+
+	if d.Config.Provider != config.ProviderNginx && d.Config.Provider != config.ProviderNginxProxy {
+		return
+	}
+
+	upstream.Keepalive = d.Config.ResolveNginxKeepalive(len(upstream.Servers))
 }
 
 type Strategy interface {
