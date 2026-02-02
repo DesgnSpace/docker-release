@@ -923,9 +923,16 @@ func (c *Controller) shouldSkipRefresh(serviceName string, imageCount int) bool 
 	}
 
 	ds, err := c.stateManager.Load(serviceName)
-	if err == nil && ds.Status == state.StatusInProgress && !ds.IsStale(state.DefaultStaleThreshold) && imageCount > 1 {
-		log.Printf("deployment in progress for %s (from another process), skipping config refresh", serviceName)
-		return true
+	if err == nil && ds.Status == state.StatusInProgress && !ds.IsStale(state.DefaultStaleThreshold) {
+		if ds.Strategy == "canary" {
+			log.Printf("canary deployment in progress for %s (from another process), skipping config refresh", serviceName)
+			return true
+		}
+
+		if imageCount > 1 {
+			log.Printf("deployment in progress for %s (from another process), skipping config refresh", serviceName)
+			return true
+		}
 	}
 
 	return false

@@ -28,7 +28,7 @@ services:
 
   linear_app:
     build:
-      context: .
+      context: ..
       dockerfile: app.Dockerfile
       args:
         BUILD_ID: "linear"
@@ -50,7 +50,7 @@ services:
 
   canary_app:
     build:
-      context: .
+      context: ..
       dockerfile: app.Dockerfile
       args:
         BUILD_ID: "canary"
@@ -74,7 +74,7 @@ services:
 
   blue_green_app:
     build:
-      context: .
+      context: ..
       dockerfile: app.Dockerfile
       args:
         BUILD_ID: "blue_green"

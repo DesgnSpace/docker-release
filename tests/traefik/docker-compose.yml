@@ -22,7 +22,11 @@ services:
       - "--providers.file.watch=true"
 
   app:
-    image: nginx:alpine
+    build:
+      context: ..
+      dockerfile: app.Dockerfile
+      args:
+        BUILD_ID: "traefik"
     deploy:
       replicas: 2
     labels:
