@@ -35,7 +35,7 @@ func bgDeployment() *Deployment {
 func TestBlueGreenExecute(t *testing.T) {
 	docker := &mockDocker{}
 	prov := &mockProvider{}
-	stateMgr := state.NewManager(t.TempDir())
+	stateMgr := state.NewManager(t.TempDir(), "")
 
 	bg := NewBlueGreen(docker, prov, stateMgr)
 
@@ -89,7 +89,7 @@ func TestBlueGreenSavesState(t *testing.T) {
 	docker := &mockDocker{}
 	prov := &mockProvider{}
 	dir := t.TempDir()
-	stateMgr := state.NewManager(dir)
+	stateMgr := state.NewManager(dir, "")
 
 	bg := NewBlueGreen(docker, prov, stateMgr)
 
@@ -118,7 +118,7 @@ func TestBlueGreenSavesState(t *testing.T) {
 func TestBlueGreenHealthFailure(t *testing.T) {
 	docker := &mockDocker{healthErr: fmt.Errorf("unhealthy")}
 	prov := &mockProvider{}
-	stateMgr := state.NewManager(t.TempDir())
+	stateMgr := state.NewManager(t.TempDir(), "")
 
 	bg := NewBlueGreen(docker, prov, stateMgr)
 
@@ -143,7 +143,7 @@ func TestBlueGreenHealthFailure(t *testing.T) {
 func TestBlueGreenRollback(t *testing.T) {
 	docker := &mockDocker{}
 	prov := &mockProvider{}
-	stateMgr := state.NewManager(t.TempDir())
+	stateMgr := state.NewManager(t.TempDir(), "")
 
 	bg := NewBlueGreen(docker, prov, stateMgr)
 	d := bgDeployment()
@@ -186,7 +186,7 @@ func TestBlueGreenRollback(t *testing.T) {
 func TestBlueGreenContextCancel(t *testing.T) {
 	docker := &mockDocker{}
 	prov := &mockProvider{}
-	stateMgr := state.NewManager(t.TempDir())
+	stateMgr := state.NewManager(t.TempDir(), "")
 
 	bg := NewBlueGreen(docker, prov, stateMgr)
 	d := bgDeployment()

@@ -80,7 +80,7 @@ func testDeployment(oldCount, newCount int) *Deployment {
 func TestLinearExecuteBasic(t *testing.T) {
 	docker := &mockDocker{}
 	prov := &mockProvider{}
-	stateMgr := state.NewManager(t.TempDir())
+	stateMgr := state.NewManager(t.TempDir(), "")
 
 	l := NewLinear(docker, prov, stateMgr)
 	d := testDeployment(2, 2)
@@ -119,7 +119,7 @@ func TestLinearExecuteBasic(t *testing.T) {
 func TestLinearExecuteOrder(t *testing.T) {
 	docker := &mockDocker{}
 	prov := &mockProvider{}
-	stateMgr := state.NewManager(t.TempDir())
+	stateMgr := state.NewManager(t.TempDir(), "")
 
 	l := NewLinear(docker, prov, stateMgr)
 	d := testDeployment(3, 3)
@@ -143,7 +143,7 @@ func TestLinearExecuteOrder(t *testing.T) {
 func TestLinearConfigAtEachStep(t *testing.T) {
 	docker := &mockDocker{}
 	prov := &mockProvider{}
-	stateMgr := state.NewManager(t.TempDir())
+	stateMgr := state.NewManager(t.TempDir(), "")
 
 	l := NewLinear(docker, prov, stateMgr)
 	d := testDeployment(2, 2)
@@ -205,7 +205,7 @@ func TestLinearConfigAtEachStep(t *testing.T) {
 func TestLinearHealthCheckFailure(t *testing.T) {
 	docker := &mockDocker{healthErr: fmt.Errorf("unhealthy")}
 	prov := &mockProvider{}
-	stateMgr := state.NewManager(t.TempDir())
+	stateMgr := state.NewManager(t.TempDir(), "")
 
 	l := NewLinear(docker, prov, stateMgr)
 	d := testDeployment(2, 2)
@@ -232,7 +232,7 @@ func TestLinearSavesState(t *testing.T) {
 	docker := &mockDocker{}
 	prov := &mockProvider{}
 	dir := t.TempDir()
-	stateMgr := state.NewManager(dir)
+	stateMgr := state.NewManager(dir, "")
 
 	l := NewLinear(docker, prov, stateMgr)
 	d := testDeployment(2, 2)
@@ -269,7 +269,7 @@ func TestLinearSavesState(t *testing.T) {
 func TestLinearRollback(t *testing.T) {
 	docker := &mockDocker{}
 	prov := &mockProvider{}
-	stateMgr := state.NewManager(t.TempDir())
+	stateMgr := state.NewManager(t.TempDir(), "")
 
 	l := NewLinear(docker, prov, stateMgr)
 	d := testDeployment(2, 2)
@@ -320,7 +320,7 @@ func TestLinearRollback(t *testing.T) {
 func TestLinearContextCancellation(t *testing.T) {
 	docker := &mockDocker{}
 	prov := &mockProvider{}
-	stateMgr := state.NewManager(t.TempDir())
+	stateMgr := state.NewManager(t.TempDir(), "")
 
 	l := NewLinear(docker, prov, stateMgr)
 	d := testDeployment(2, 2)

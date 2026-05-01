@@ -31,11 +31,15 @@ func applyNginxKeepalive(d *Deployment, upstream *provider.UpstreamState) {
 		return
 	}
 
-	if d.Config.Provider != config.ProviderNginx && d.Config.Provider != config.ProviderNginxProxy {
+	if d.Config.Provider == config.ProviderNginx || d.Config.Provider == config.ProviderNginxProxy {
+		upstream.Keepalive = d.Config.ResolveNginxKeepalive(len(upstream.Servers))
 		return
 	}
 
-	upstream.Keepalive = d.Config.ResolveNginxKeepalive(len(upstream.Servers))
+	if d.Config.Provider == config.ProviderAngie {
+		upstream.Keepalive = d.Config.ResolveAngieKeepalive(len(upstream.Servers))
+		return
+	}
 }
 
 type Strategy interface {

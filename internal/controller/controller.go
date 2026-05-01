@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -25,6 +26,7 @@ import (
 type Controller struct {
 	docker       *docker.Client
 	stateManager *state.Manager
+	project      string
 
 	mu             sync.Mutex
 	deployments    map[string]context.CancelFunc
@@ -32,11 +34,12 @@ type Controller struct {
 	wg             sync.WaitGroup
 }
 
-func New(dockerClient *docker.Client, stateManager *state.Manager) *Controller {
+func New(dockerClient *docker.Client, stateManager *state.Manager, project string) *Controller {
 	return &Controller{
 		docker:       dockerClient,
 		stateManager: stateManager,
 		deployments:  make(map[string]context.CancelFunc),
+		project:      project,
 	}
 }
 
@@ -57,7 +60,7 @@ func (c *Controller) Watch(ctx context.Context) error {
 		log.Printf("  %s: %d container(s)", name, len(containers))
 	}
 
-	msgCh, errCh := c.docker.Events(ctx)
+	msgCh, errCh := c.docker.Events(ctx, c.project)
 
 	c.generateInitialConfigs(ctx, services)
 
@@ -118,7 +121,7 @@ func (c *Controller) handleStart(ctx context.Context, containerID string, attrs 
 
 	log.Printf("container started: %s (service=%s)", containerID[:12], serviceName)
 
-	containers, err := c.docker.ListManagedContainers(ctx)
+	containers, err := c.docker.ListManagedContainers(ctx, c.project)
 	if err != nil {
 		log.Printf("error listing containers: %v", err)
 		return
@@ -281,6 +284,8 @@ func (c *Controller) createProvider(cfg *config.ServiceConfig) provider.Provider
 	switch cfg.Provider {
 	case config.ProviderNginx:
 		return provider.NewNginx(cfg.NginxConfigDir, c.docker, cfg.NginxContainer)
+	case config.ProviderAngie:
+		return provider.NewAngie(cfg.AngieConfigDir, c.docker, cfg.AngieContainer)
 	case config.ProviderTraefik:
 		return provider.NewTraefik(cfg.TraefikConfigDir)
 	case config.ProviderNginxProxy:
@@ -345,7 +350,7 @@ func (c *Controller) waitForContainers(ctx context.Context, serviceName, imageID
 }
 
 func (c *Controller) listContainersByImage(ctx context.Context, serviceName, imageID string) []types.Container {
-	containers, err := c.docker.ListManagedContainers(ctx)
+	containers, err := c.docker.ListManagedContainers(ctx, c.project)
 	if err != nil {
 		return nil
 	}
@@ -381,11 +386,11 @@ func (c *Controller) Release(ctx context.Context, service string, force bool) er
 		return fmt.Errorf("loading state: %w", err)
 	}
 
-	if ds.Status == state.StatusInProgress && !ds.IsStale(state.DefaultStaleThreshold) {
-		return fmt.Errorf("deployment already in progress for %q (started %s)", service, formatTimestamp(ds.UpdatedAt))
+	if ds.Status == state.StatusInProgress && !ds.IsStale(state.DefaultStaleThreshold) && !force {
+		return fmt.Errorf("deployment already in progress for %q (started %s) — use --force to override", service, formatTimestamp(ds.UpdatedAt))
 	}
 
-	containers, err := c.docker.ListManagedContainers(ctx)
+	containers, err := c.docker.ListManagedContainers(ctx, c.project)
 	if err != nil {
 		return fmt.Errorf("listing containers: %w", err)
 	}
@@ -414,10 +419,6 @@ func (c *Controller) Release(ctx context.Context, service string, force bool) er
 		return nil
 	}
 
-	if !force {
-		return fmt.Errorf("no pending deployment for %q (all containers share the same image, use --force to redeploy)", service)
-	}
-
 	newContainers, err := c.scaleUp(ctx, serviceContainers)
 	if err != nil {
 		return fmt.Errorf("scaling up: %w", err)
@@ -440,9 +441,11 @@ func (c *Controller) WaitDeployments() {
 func (c *Controller) scaleUp(ctx context.Context, existing []types.Container) ([]types.Container, error) {
 	log.Printf("scaling up: creating %d container(s) from image", len(existing))
 
+	maxNum := maxContainerNumber(existing)
+
 	var newIDs []string
-	for _, ctr := range existing {
-		newID, err := c.docker.CreateContainerFromImage(ctx, ctr)
+	for i, ctr := range existing {
+		newID, err := c.docker.CreateContainerFromImage(ctx, ctr, maxNum+1+i)
 		if err != nil {
 			for _, id := range newIDs {
 				_ = c.docker.Remove(context.Background(), id)
@@ -457,7 +460,7 @@ func (c *Controller) scaleUp(ctx context.Context, existing []types.Container) ([
 		newIDSet[id] = true
 	}
 
-	allContainers, err := c.docker.ListManagedContainers(ctx)
+	allContainers, err := c.docker.ListManagedContainers(ctx, c.project)
 	if err != nil {
 		return nil, fmt.Errorf("listing containers: %w", err)
 	}
@@ -470,6 +473,16 @@ func (c *Controller) scaleUp(ctx context.Context, existing []types.Container) ([
 	}
 
 	return newContainers, nil
+}
+
+func maxContainerNumber(containers []types.Container) int {
+	max := 0
+	for _, ctr := range containers {
+		if n, err := strconv.Atoi(ctr.Labels["com.docker.compose.container.number"]); err == nil && n > max {
+			max = n
+		}
+	}
+	return max
 }
 
 func splitByImage(containers []types.Container, images map[string][]types.Container) (old, new []types.Container) {
@@ -505,6 +518,22 @@ func filterServiceContainers(containers []types.Container, serviceName string) [
 }
 
 func (c *Controller) serviceFromEvent(ctx context.Context, containerID string, attrs map[string]string) string {
+	if c.project != "" {
+		eventProject := attrs["com.docker.compose.project"]
+		if eventProject == "" {
+			info, err := c.docker.Inspect(ctx, containerID)
+			if err != nil {
+				return ""
+			}
+			if info.Config != nil && info.Config.Labels != nil {
+				eventProject = info.Config.Labels["com.docker.compose.project"]
+			}
+		}
+		if eventProject != c.project {
+			return ""
+		}
+	}
+
 	serviceName := attrs["com.docker.compose.service"]
 	if serviceName != "" {
 		return serviceName
@@ -582,7 +611,7 @@ func (c *Controller) Rollback(ctx context.Context, service string) error {
 }
 
 func (c *Controller) resolveServiceConfig(ctx context.Context, service string) *config.ServiceConfig {
-	containers, err := c.docker.ListManagedContainers(ctx)
+	containers, err := c.docker.ListManagedContainers(ctx, c.project)
 	if err != nil {
 		return &config.ServiceConfig{Provider: config.ProviderNone}
 	}
@@ -627,7 +656,7 @@ func (c *Controller) Status(ctx context.Context, service string) error {
 }
 
 func (c *Controller) statusAll(ctx context.Context) error {
-	containers, err := c.docker.ListManagedContainers(ctx)
+	containers, err := c.docker.ListManagedContainers(ctx, c.project)
 	if err != nil {
 		return fmt.Errorf("listing containers: %w", err)
 	}
@@ -668,7 +697,7 @@ func (c *Controller) statusAll(ctx context.Context) error {
 }
 
 func (c *Controller) discoverServices(ctx context.Context) (map[string][]types.Container, error) {
-	containers, err := c.docker.ListManagedContainers(ctx)
+	containers, err := c.docker.ListManagedContainers(ctx, c.project)
 	if err != nil {
 		return nil, err
 	}
@@ -811,6 +840,10 @@ func (c *Controller) generateServiceConfig(ctx context.Context, name string, cfg
 		upstream.Keepalive = cfg.ResolveNginxKeepalive(len(upstream.Servers))
 	}
 
+	if cfg.Provider == config.ProviderAngie {
+		upstream.Keepalive = cfg.ResolveAngieKeepalive(len(upstream.Servers))
+	}
+
 	if err := prov.GenerateConfig(upstream); err != nil {
 		log.Printf("error generating config for %s: %v", name, err)
 		return
@@ -832,7 +865,7 @@ func (c *Controller) generateServiceConfig(ctx context.Context, name string, cfg
 }
 
 func (c *Controller) refreshServiceConfig(ctx context.Context, serviceName string) {
-	containers, err := c.docker.ListManagedContainers(ctx)
+	containers, err := c.docker.ListManagedContainers(ctx, c.project)
 	if err != nil {
 		log.Printf("error listing containers: %v", err)
 		return
@@ -872,7 +905,7 @@ func (c *Controller) refreshServiceConfigAfter(ctx context.Context, serviceName 
 }
 
 func (c *Controller) refreshAllConfigs(ctx context.Context) {
-	containers, err := c.docker.ListManagedContainers(ctx)
+	containers, err := c.docker.ListManagedContainers(ctx, c.project)
 	if err != nil {
 		log.Printf("error listing containers: %v", err)
 		return

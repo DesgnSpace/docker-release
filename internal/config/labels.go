@@ -19,6 +19,7 @@ type ProviderType string
 const (
 	ProviderNginxProxy ProviderType = "nginx-proxy"
 	ProviderNginx      ProviderType = "nginx"
+	ProviderAngie      ProviderType = "angie"
 	ProviderTraefik    ProviderType = "traefik"
 	ProviderNone       ProviderType = "none"
 )
@@ -40,6 +41,9 @@ type ServiceConfig struct {
 	NginxContainer     string
 	NginxConfigDir     string
 	NginxKeepalive     int
+	AngieContainer     string
+	AngieConfigDir     string
+	AngieKeepalive     int
 	TraefikConfigDir   string
 	UpstreamName       string
 
@@ -73,6 +77,9 @@ func ParseLabels(labels map[string]string) (*ServiceConfig, error) {
 		NginxContainer:     getOr(labels, "release.nginx.container", ""),
 		NginxConfigDir:     getOr(labels, "release.nginx.config_dir", ""),
 		NginxKeepalive:     parseIntOr(labels, "release.nginx.keepalive", -1),
+		AngieContainer:     getOr(labels, "release.angie.container", ""),
+		AngieConfigDir:     getOr(labels, "release.angie.config_dir", ""),
+		AngieKeepalive:     parseIntOr(labels, "release.angie.keepalive", -1),
 		TraefikConfigDir:   getOr(labels, "release.traefik.config_dir", ""),
 		UpstreamName:       getOr(labels, "release.upstream", ""),
 
@@ -105,7 +112,7 @@ func ParseLabels(labels map[string]string) (*ServiceConfig, error) {
 
 func (c *ServiceConfig) validate() error {
 	switch c.Provider {
-	case ProviderNginxProxy, ProviderNginx, ProviderTraefik, ProviderNone:
+	case ProviderNginxProxy, ProviderNginx, ProviderAngie, ProviderTraefik, ProviderNone:
 	default:
 		return fmt.Errorf("unknown provider: %s", c.Provider)
 	}
@@ -128,12 +135,28 @@ func (c *ServiceConfig) validate() error {
 		return fmt.Errorf("nginx.keepalive must be >= 0, got %d", c.NginxKeepalive)
 	}
 
+	if c.AngieKeepalive < -1 {
+		return fmt.Errorf("angie.keepalive must be >= 0, got %d", c.AngieKeepalive)
+	}
+
 	return nil
 }
 
 func (c *ServiceConfig) ResolveNginxKeepalive(serverCount int) int {
 	if c.NginxKeepalive >= 0 {
 		return c.NginxKeepalive
+	}
+
+	if serverCount <= 0 {
+		return 0
+	}
+
+	return serverCount + 1
+}
+
+func (c *ServiceConfig) ResolveAngieKeepalive(serverCount int) int {
+	if c.AngieKeepalive >= 0 {
+		return c.AngieKeepalive
 	}
 
 	if serverCount <= 0 {

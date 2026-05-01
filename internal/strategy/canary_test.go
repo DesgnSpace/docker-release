@@ -37,7 +37,7 @@ func canaryDeployment() *Deployment {
 func TestCanaryExecute(t *testing.T) {
 	docker := &mockDocker{}
 	prov := &mockProvider{}
-	stateMgr := state.NewManager(t.TempDir())
+	stateMgr := state.NewManager(t.TempDir(), "")
 
 	c := NewCanary(docker, prov, stateMgr)
 	d := canaryDeployment()
@@ -74,7 +74,7 @@ func TestCanaryExecute(t *testing.T) {
 func TestCanaryWeightProgression(t *testing.T) {
 	docker := &mockDocker{}
 	prov := &mockProvider{}
-	stateMgr := state.NewManager(t.TempDir())
+	stateMgr := state.NewManager(t.TempDir(), "")
 
 	c := NewCanary(docker, prov, stateMgr)
 	d := canaryDeployment()
@@ -124,7 +124,7 @@ func TestCanarySavesState(t *testing.T) {
 	docker := &mockDocker{}
 	prov := &mockProvider{}
 	dir := t.TempDir()
-	stateMgr := state.NewManager(dir)
+	stateMgr := state.NewManager(dir, "")
 
 	c := NewCanary(docker, prov, stateMgr)
 
@@ -157,7 +157,7 @@ func TestCanarySavesState(t *testing.T) {
 func TestCanaryHealthFailure(t *testing.T) {
 	docker := &mockDocker{healthErr: fmt.Errorf("unhealthy")}
 	prov := &mockProvider{}
-	stateMgr := state.NewManager(t.TempDir())
+	stateMgr := state.NewManager(t.TempDir(), "")
 
 	c := NewCanary(docker, prov, stateMgr)
 
@@ -178,7 +178,7 @@ func TestCanaryHealthFailure(t *testing.T) {
 func TestCanaryRollback(t *testing.T) {
 	docker := &mockDocker{}
 	prov := &mockProvider{}
-	stateMgr := state.NewManager(t.TempDir())
+	stateMgr := state.NewManager(t.TempDir(), "")
 
 	c := NewCanary(docker, prov, stateMgr)
 	d := canaryDeployment()
@@ -223,7 +223,7 @@ func TestCanaryRollback(t *testing.T) {
 func TestCanaryLargeStep(t *testing.T) {
 	docker := &mockDocker{}
 	prov := &mockProvider{}
-	stateMgr := state.NewManager(t.TempDir())
+	stateMgr := state.NewManager(t.TempDir(), "")
 
 	c := NewCanary(docker, prov, stateMgr)
 	d := canaryDeployment()
@@ -243,7 +243,7 @@ func TestCanaryLargeStep(t *testing.T) {
 func TestCanaryContextCancel(t *testing.T) {
 	docker := &mockDocker{}
 	prov := &mockProvider{}
-	stateMgr := state.NewManager(t.TempDir())
+	stateMgr := state.NewManager(t.TempDir(), "")
 
 	c := NewCanary(docker, prov, stateMgr)
 	d := canaryDeployment()

@@ -49,11 +49,12 @@ type Containers struct {
 }
 
 type Manager struct {
-	dir string
+	dir     string
+	project string
 }
 
-func NewManager(dir string) *Manager {
-	return &Manager{dir: dir}
+func NewManager(dir, project string) *Manager {
+	return &Manager{dir: dir, project: project}
 }
 
 func (m *Manager) Load(service string) (*DeploymentState, error) {
@@ -109,5 +110,9 @@ func GenerateDeploymentID() string {
 }
 
 func (m *Manager) path(service string) string {
-	return filepath.Join(m.dir, service+"_state.json")
+	name := service
+	if m.project != "" {
+		name = m.project + "_" + service
+	}
+	return filepath.Join(m.dir, name+"_state.json")
 }

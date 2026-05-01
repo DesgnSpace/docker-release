@@ -10,7 +10,7 @@ import (
 
 func TestLoadMissing(t *testing.T) {
 	dir := t.TempDir()
-	mgr := NewManager(dir)
+	mgr := NewManager(dir, "")
 
 	s, err := mgr.Load("webapp")
 	if err != nil {
@@ -27,7 +27,7 @@ func TestLoadMissing(t *testing.T) {
 
 func TestSaveAndLoad(t *testing.T) {
 	dir := t.TempDir()
-	mgr := NewManager(dir)
+	mgr := NewManager(dir, "")
 
 	original := &DeploymentState{
 		Service:              "webapp",
@@ -70,7 +70,7 @@ func TestSaveAndLoad(t *testing.T) {
 
 func TestSaveAtomic(t *testing.T) {
 	dir := t.TempDir()
-	mgr := NewManager(dir)
+	mgr := NewManager(dir, "")
 
 	s := &DeploymentState{Service: "webapp", Status: StatusIdle}
 	if err := mgr.Save(s); err != nil {
@@ -109,7 +109,7 @@ func TestGenerateDeploymentID(t *testing.T) {
 
 func TestSaveCreatesDir(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "nested", "state")
-	mgr := NewManager(dir)
+	mgr := NewManager(dir, "")
 
 	s := &DeploymentState{Service: "webapp", Status: StatusIdle}
 	if err := mgr.Save(s); err != nil {
@@ -123,7 +123,7 @@ func TestSaveCreatesDir(t *testing.T) {
 
 func TestSaveSetsUpdatedAt(t *testing.T) {
 	dir := t.TempDir()
-	mgr := NewManager(dir)
+	mgr := NewManager(dir, "")
 
 	s := &DeploymentState{Service: "webapp", Status: StatusInProgress}
 	before := time.Now()
@@ -202,7 +202,7 @@ func TestIsStaleRollingBack(t *testing.T) {
 
 func TestLegacyJSONBackwardCompat(t *testing.T) {
 	dir := t.TempDir()
-	mgr := NewManager(dir)
+	mgr := NewManager(dir, "")
 
 	legacy := `{"service":"webapp","status":"in_progress","strategy":"linear","current_weight":0}`
 	path := filepath.Join(dir, "webapp_state.json")
@@ -231,7 +231,7 @@ func TestLegacyJSONBackwardCompat(t *testing.T) {
 
 func TestUpdatedAtPersistedInJSON(t *testing.T) {
 	dir := t.TempDir()
-	mgr := NewManager(dir)
+	mgr := NewManager(dir, "")
 
 	s := &DeploymentState{Service: "webapp", Status: StatusInProgress}
 	if err := mgr.Save(s); err != nil {

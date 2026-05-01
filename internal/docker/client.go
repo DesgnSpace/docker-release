@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types"
@@ -33,9 +35,12 @@ func (c *Client) Ping(ctx context.Context) error {
 	return err
 }
 
-func (c *Client) ListManagedContainers(ctx context.Context) ([]types.Container, error) {
+func (c *Client) ListManagedContainers(ctx context.Context, project string) ([]types.Container, error) {
 	f := filters.NewArgs()
 	f.Add("label", "release.enable=true")
+	if project != "" {
+		f.Add("label", fmt.Sprintf("com.docker.compose.project=%s", project))
+	}
 
 	return c.api.ContainerList(ctx, container.ListOptions{Filters: f})
 }
@@ -71,10 +76,13 @@ func (c *Client) Logs(ctx context.Context, containerID string, lines string) (io
 	})
 }
 
-func (c *Client) Events(ctx context.Context) (<-chan events.Message, <-chan error) {
+func (c *Client) Events(ctx context.Context, project string) (<-chan events.Message, <-chan error) {
 	f := filters.NewArgs()
 	f.Add("type", "container")
 	f.Add("label", "release.enable=true")
+	if project != "" {
+		f.Add("label", fmt.Sprintf("com.docker.compose.project=%s", project))
+	}
 
 	return c.api.Events(ctx, events.ListOptions{Filters: f})
 }
@@ -107,15 +115,21 @@ func (c *Client) FindContainerByService(ctx context.Context, serviceName string)
 	return containers[0].ID, nil
 }
 
-func (c *Client) CreateContainerFromImage(ctx context.Context, ref types.Container) (string, error) {
+func (c *Client) CreateContainerFromImage(ctx context.Context, ref types.Container, num int) (string, error) {
 	refInfo, err := c.api.ContainerInspect(ctx, ref.ID)
 	if err != nil {
 		return "", fmt.Errorf("inspecting reference container: %w", err)
 	}
 
+	labels := make(map[string]string, len(ref.Labels))
+	for k, v := range ref.Labels {
+		labels[k] = v
+	}
+	labels["com.docker.compose.container.number"] = strconv.Itoa(num)
+
 	cfg := &container.Config{
 		Image:        refInfo.Config.Image,
-		Labels:       ref.Labels,
+		Labels:       labels,
 		Healthcheck:  refInfo.Config.Healthcheck,
 		ExposedPorts: refInfo.Config.ExposedPorts,
 		Env:          refInfo.Config.Env,
@@ -132,7 +146,8 @@ func (c *Client) CreateContainerFromImage(ctx context.Context, ref types.Contain
 		}
 	}
 
-	resp, err := c.api.ContainerCreate(ctx, cfg, nil, networkCfg, nil, "")
+	name := nextContainerName(ref, num)
+	resp, err := c.api.ContainerCreate(ctx, cfg, nil, networkCfg, nil, name)
 	if err != nil {
 		return "", fmt.Errorf("creating container: %w", err)
 	}
@@ -154,6 +169,21 @@ func (c *Client) CreateContainerFromImage(ctx context.Context, ref types.Contain
 	}
 
 	return resp.ID, nil
+}
+
+func nextContainerName(ref types.Container, num int) string {
+	for _, name := range ref.Names {
+		n := strings.TrimPrefix(name, "/")
+		if idx := strings.LastIndexAny(n, "-_"); idx != -1 {
+			if _, err := strconv.Atoi(n[idx+1:]); err == nil {
+				return n[:idx+1] + strconv.Itoa(num)
+			}
+		}
+	}
+
+	project := ref.Labels["com.docker.compose.project"]
+	service := ref.Labels["com.docker.compose.service"]
+	return fmt.Sprintf("%s-%s-%d", project, service, num)
 }
 
 func primaryNetwork(ref types.Container) (name string, id string) {

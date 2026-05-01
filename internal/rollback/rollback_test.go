@@ -41,7 +41,7 @@ func (m *mockStrategy) Rollback(_ context.Context, d *strategy.Deployment) error
 
 func TestCoordinatorExecute(t *testing.T) {
 	dir := t.TempDir()
-	stateMgr := state.NewManager(dir)
+	stateMgr := state.NewManager(dir, "")
 
 	ds := &state.DeploymentState{
 		Service:  "app",
@@ -95,7 +95,7 @@ func TestCoordinatorExecute(t *testing.T) {
 
 func TestCoordinatorIdleService(t *testing.T) {
 	dir := t.TempDir()
-	stateMgr := state.NewManager(dir)
+	stateMgr := state.NewManager(dir, "")
 
 	coord := NewCoordinator(stateMgr, &mockResolver{})
 
@@ -111,7 +111,7 @@ func TestCoordinatorIdleService(t *testing.T) {
 
 func TestCoordinatorUnknownStrategy(t *testing.T) {
 	dir := t.TempDir()
-	stateMgr := state.NewManager(dir)
+	stateMgr := state.NewManager(dir, "")
 
 	ds := &state.DeploymentState{
 		Service:  "app",
@@ -134,7 +134,7 @@ func TestCoordinatorUnknownStrategy(t *testing.T) {
 
 func TestCoordinatorExecuteWithDeployment(t *testing.T) {
 	dir := t.TempDir()
-	stateMgr := state.NewManager(dir)
+	stateMgr := state.NewManager(dir, "")
 
 	ds := &state.DeploymentState{
 		Service:  "app",
@@ -176,7 +176,7 @@ func TestCoordinatorExecuteWithDeployment(t *testing.T) {
 
 func TestCoordinatorSkipsMissingContainers(t *testing.T) {
 	dir := t.TempDir()
-	stateMgr := state.NewManager(dir)
+	stateMgr := state.NewManager(dir, "")
 
 	ds := &state.DeploymentState{
 		Service:  "app",
