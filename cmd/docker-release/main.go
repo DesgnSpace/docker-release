@@ -14,7 +14,6 @@ import (
 	"github.com/malico/docker-release/internal/state"
 )
 
-
 var version = "dev"
 
 func main() {
@@ -27,33 +26,21 @@ func main() {
 	case "watch":
 		run(cmdWatch)
 	case "release":
-		if len(os.Args) < 3 || os.Args[2] == "--help" || os.Args[2] == "-h" {
-			if len(os.Args) < 3 {
-				fmt.Fprintln(os.Stderr, "usage: docker-release release <service> [--force]")
-				os.Exit(1)
-			}
+		if len(os.Args) < 3 {
+			fmt.Fprintln(os.Stderr, "usage: dr release <service> [--force]")
+			os.Exit(1)
+		}
+		if os.Args[2] == "--help" || os.Args[2] == "-h" {
 			printUsage()
 			return
 		}
-		service := os.Args[2]
-		force := len(os.Args) >= 4 && os.Args[3] == "--force"
-		run(func(ctrl *controller.Controller) error {
-			ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-			defer cancel()
-
-			if err := ctrl.Release(ctx, service, force); err != nil {
-				return err
-			}
-
-			ctrl.WaitDeployments()
-			return nil
-		})
+		runRelease(os.Args[2], len(os.Args) >= 4 && os.Args[3] == "--force")
 	case "rollback":
-		if len(os.Args) < 3 || os.Args[2] == "--help" || os.Args[2] == "-h" {
-			if len(os.Args) < 3 {
-				fmt.Fprintln(os.Stderr, "usage: docker-release rollback <service>")
-				os.Exit(1)
-			}
+		if len(os.Args) < 3 {
+			fmt.Fprintln(os.Stderr, "usage: dr rollback <service>")
+			os.Exit(1)
+		}
+		if os.Args[2] == "--help" || os.Args[2] == "-h" {
 			printUsage()
 			return
 		}
@@ -77,10 +64,25 @@ func main() {
 	case "help", "--help", "-h":
 		printUsage()
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
-		printUsage()
-		os.Exit(1)
+		// Positional shorthand: dr <service> [--force]
+		// Anything not matching a reserved command is treated as a service name.
+		// If your service is named after a reserved word, use: dr release <service>
+		runRelease(os.Args[1], len(os.Args) >= 3 && os.Args[2] == "--force")
 	}
+}
+
+func runRelease(service string, force bool) {
+	run(func(ctrl *controller.Controller) error {
+		ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer cancel()
+
+		if err := ctrl.Release(ctx, service, force); err != nil {
+			return err
+		}
+
+		ctrl.WaitDeployments()
+		return nil
+	})
 }
 
 func run(fn func(*controller.Controller) error) {
@@ -91,7 +93,7 @@ func run(fn func(*controller.Controller) error) {
 	}
 	defer dockerClient.Close()
 
-	project, err := detectProject(dockerClient)
+	project, err := config.DetectProject(context.Background(), dockerClient)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: cannot determine compose project name: %v\n", err)
 		os.Exit(1)
@@ -107,10 +109,6 @@ func run(fn func(*controller.Controller) error) {
 	}
 }
 
-func detectProject(dockerClient *docker.Client) (string, error) {
-	return config.DetectProject(context.Background(), dockerClient)
-}
-
 func cmdWatch(ctrl *controller.Controller) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
@@ -122,16 +120,21 @@ func printUsage() {
 	fmt.Printf(`dr %s — deployment controller for Docker Compose
 
 Usage:
+  dr <service> [--force]           Deploy a service (short form)
   dr <command> [options]
 
 Commands:
-  watch                        Start the controller (monitors Docker events)
-  release <service> [--force]  Deploy a service
-                               --force overrides an in-progress deployment
-  rollback <service>           Roll back a service to its previous deployment
-  status [service]             Show deployment state
-  version                      Print version
-  help, --help, -h             Show this help
+  <service>                        Deploy the named service (alias for release)
+  release <service> [--force]      Deploy a service explicitly
+                                   --force overrides an in-progress deployment
+  rollback <service>               Roll back a service to its previous deployment
+  status [service]                 Show deployment state
+  watch                            Start the controller (run via compose, not manually)
+  version                          Print version
+  help, --help, -h                 Show this help
+
+Note: if a service name collides with a reserved command (e.g. a service named
+"status"), use the explicit form: dr release status
 
 `, version)
 }

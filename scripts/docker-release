@@ -1,0 +1,60 @@
+#!/bin/sh
+# Docker CLI plugin for docker-release.
+# Install: see https://github.com/malico/docker-release#install
+#
+#   curl -fsSL https://raw.githubusercontent.com/malico/docker-release/main/scripts/docker-release \
+#     | sudo tee ~/.docker/cli-plugins/docker-release >/dev/null \
+#     && sudo chmod +x ~/.docker/cli-plugins/docker-release
+#
+# Usage: docker release [-f <compose-file>] <service>
+
+if [ "$1" = "docker-cli-plugin-metadata" ]; then
+  printf '{"SchemaVersion":"0.1.0","Vendor":"docker-release","ShortDescription":"Deployment controller for Docker Compose"}\n'
+  exit 0
+fi
+
+# Parse optional -f <file> flag before forwarding remaining args to the controller.
+compose_file=""
+if [ "$1" = "-f" ] && [ -n "$2" ]; then
+  compose_file="$2"
+  shift 2
+fi
+
+_dr_project() {
+  if [ -n "$COMPOSE_PROJECT_NAME" ]; then
+    printf '%s' "$COMPOSE_PROJECT_NAME"
+    return
+  fi
+  if [ -n "$compose_file" ]; then
+    name=$(awk 'NR<=30 && /^name:/ { sub(/^name:[[:space:]]*/, ""); gsub(/[[:space:]"'"'"']/, ""); print; exit }' "$compose_file" 2>/dev/null)
+    if [ -n "$name" ]; then
+      printf '%s' "$name"
+      return
+    fi
+    basename "$(dirname "$compose_file")" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9_-' '-' | sed 's/^-*//;s/-*$//'
+    return
+  fi
+  for f in compose.yml compose.yaml docker-compose.yml docker-compose.yaml; do
+    [ -f "$f" ] || continue
+    name=$(awk 'NR<=30 && /^name:/ { sub(/^name:[[:space:]]*/, ""); gsub(/[[:space:]"'"'"']/, ""); print; exit }' "$f")
+    if [ -n "$name" ]; then
+      printf '%s' "$name"
+      return
+    fi
+  done
+  basename "$PWD" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9_-' '-' | sed 's/^-*//;s/-*$//'
+}
+
+project=$(_dr_project)
+cid=$(docker ps \
+  --filter "label=com.docker.compose.project=${project}" \
+  --filter "label=org.opencontainers.image.title=docker-release" \
+  --format "{{.ID}}" | head -1)
+
+if [ -z "$cid" ]; then
+  echo "error: docker-release controller not running in project '${project}'" >&2
+  echo "       start with: docker compose up -d" >&2
+  exit 1
+fi
+
+exec docker exec "$cid" dr "$@"

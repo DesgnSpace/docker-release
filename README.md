@@ -7,8 +7,8 @@ Zero-downtime deployment controller for Docker Compose. Watches your services an
 `docker-release` runs as a sidecar in your Compose stack. It listens to Docker events and, when it detects a new image on a managed service, orchestrates the cutover: spinning up new containers, shifting traffic through your reverse proxy, and draining old containers gracefully.
 
 ```
-docker compose up -d          # new image pulled for "app"
-docker release app            # trigger deployment → zero-downtime rollout
+docker compose up -d   # new image pulled for "app"
+docker release app     # deploy → zero-downtime rollout
 ```
 
 ---
@@ -50,24 +50,14 @@ services:
 
 See [label reference](#label-reference) for all options.
 
-### 3. Install the CLI helper
+### 3. Install the CLI plugin
 
-One-time setup on your host. The scripts live in `scripts/` — they auto-detect the active compose project from your current directory and proxy commands into the running controller container.
-
-```sh
-make dev              # Docker CLI plugin → docker release <cmd>
-make dev-standalone   # Standalone script  → dr <cmd>
-```
-
-Or manually:
+One-line install — no repo clone needed:
 
 ```sh
-# Docker CLI plugin (recommended)
-mkdir -p ~/.docker/cli-plugins
-ln -sf /path/to/docker-release/scripts/docker-release ~/.docker/cli-plugins/docker-release
-
-# Standalone script
-ln -sf /path/to/docker-release/scripts/dr /usr/local/bin/dr
+curl -fsSL https://raw.githubusercontent.com/malico/docker-release/main/scripts/docker-release \
+  | sudo tee ~/.docker/cli-plugins/docker-release >/dev/null \
+  && sudo chmod +x ~/.docker/cli-plugins/docker-release
 ```
 
 After install, from any project directory:
@@ -83,16 +73,17 @@ docker release rollback app  # roll back
 ## Usage
 
 ```
-dr <command> [options]
+docker release <service> [--force]   Deploy a service
+docker release <command> [options]
 
-  watch                        Start the controller (run via compose, not manually)
-  release <service> [--force]  Deploy a service
-                               --force overrides an in-progress deployment
-  rollback <service>           Roll back to the previous deployment
-  status [service]             Show deployment state
-  install [--plugin]           Print host helper script to stdout
-  version                      Print version
+  <service>                          Deploy the named service
+  release <service> [--force]        Deploy explicitly; --force overrides in-progress
+  rollback <service>                 Roll back to the previous deployment
+  status [service]                   Show deployment state
+  version                            Print version
 ```
+
+Service names that match a reserved command word (e.g. a service literally named `status`) must use the explicit form: `docker release release status`.
 
 ---
 
@@ -224,9 +215,8 @@ release.canary.affinity: ip    # ip | cookie
 
 ## Local development
 
-Once the stack is running (`docker compose up -d`), run `make dev` to symlink the helper script into your Docker CLI plugins directory. No Go toolchain needed — the binary lives inside Docker.
+Once the stack is running (`docker compose up -d`), run `make dev` to symlink the plugin script into your Docker CLI plugins directory. No Go toolchain needed — the binary lives inside Docker.
 
 ```sh
-make dev              # docker release <cmd>
-make dev-standalone   # dr <cmd>
+make dev   # symlinks scripts/docker-release → ~/.docker/cli-plugins/docker-release
 ```
