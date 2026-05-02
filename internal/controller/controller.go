@@ -253,13 +253,15 @@ func (c *Controller) deploy(parentCtx context.Context, serviceName string, cfg *
 
 	prov := c.createProvider(cfg)
 
-	oldInfos, err := c.resolveContainers(ctx, oldContainers)
+	resolveAddr := cfg.Provider != config.ProviderNone
+
+	oldInfos, err := c.resolveContainers(ctx, oldContainers, resolveAddr)
 	if err != nil {
 		log.Printf("error resolving old containers for %s: %v", serviceName, err)
 		return
 	}
 
-	newInfos, err := c.resolveContainers(ctx, newContainers)
+	newInfos, err := c.resolveContainers(ctx, newContainers, resolveAddr)
 	if err != nil {
 		log.Printf("error resolving new containers for %s: %v", serviceName, err)
 		return
@@ -330,6 +332,10 @@ func (c *Controller) createProvider(cfg *config.ServiceConfig) provider.Provider
 		return provider.NewTraefik(cfg.TraefikConfigDir)
 	case config.ProviderNginxProxy:
 		return c.getNginxProxyProvider(cfg)
+	case config.ProviderCaddy:
+		return provider.NewCaddy(cfg.CaddyConfigDir, c.docker, cfg.CaddyContainer, cfg.CaddyPath)
+	case config.ProviderHAProxy:
+		return provider.NewHAProxy(cfg.HAProxyConfigDir, c.docker, cfg.HAProxyContainer)
 	case config.ProviderNone:
 		return provider.NewNoop()
 	default:
@@ -401,20 +407,22 @@ func (c *Controller) listContainersByImage(ctx context.Context, serviceName, ima
 	return matched
 }
 
-func (c *Controller) resolveContainers(ctx context.Context, containers []types.Container) ([]strategy.ContainerInfo, error) {
+func (c *Controller) resolveContainers(ctx context.Context, containers []types.Container, resolveAddr bool) ([]strategy.ContainerInfo, error) {
 	var infos []strategy.ContainerInfo
 
 	for _, ctr := range containers {
-		addr, err := c.docker.ContainerAddr(ctx, ctr.ID)
-		if err != nil {
-			log.Printf("warning: resolving %s: %v", ctr.ID[:12], err)
-			continue
+		info := strategy.ContainerInfo{ID: ctr.ID}
+
+		if resolveAddr {
+			addr, err := c.docker.ContainerAddr(ctx, ctr.ID)
+			if err != nil {
+				log.Printf("warning: resolving %s: %v", ctr.ID[:12], err)
+				continue
+			}
+			info.Addr = addr
 		}
 
-		infos = append(infos, strategy.ContainerInfo{
-			ID:   ctr.ID,
-			Addr: addr,
-		})
+		infos = append(infos, info)
 	}
 
 	return infos, nil
@@ -797,8 +805,14 @@ func (c *Controller) cleanStaleConfigs(activeConfigs map[string]*config.ServiceC
 		switch cfg.Provider {
 		case config.ProviderNginx:
 			cd = configDir{dir: cfg.NginxConfigDir, ext: ".conf"}
+		case config.ProviderAngie:
+			cd = configDir{dir: cfg.AngieConfigDir, ext: ".conf"}
 		case config.ProviderTraefik:
 			cd = configDir{dir: cfg.TraefikConfigDir, ext: ".yml"}
+		case config.ProviderCaddy:
+			cd = configDir{dir: cfg.CaddyConfigDir, ext: ".caddy"}
+		case config.ProviderHAProxy:
+			cd = configDir{dir: cfg.HAProxyConfigDir, ext: ".cfg"}
 		default:
 			continue
 		}
@@ -881,12 +895,29 @@ func (c *Controller) generateServiceConfig(ctx context.Context, name string, cfg
 		return
 	}
 
+	if checkHealth {
+		hasActive := false
+		for _, s := range upstream.Servers {
+			if !s.Down {
+				hasActive = true
+				break
+			}
+		}
+		if !hasActive {
+			return
+		}
+	}
+
 	if cfg.Provider == config.ProviderNginx || cfg.Provider == config.ProviderNginxProxy {
 		upstream.Keepalive = cfg.ResolveNginxKeepalive(len(upstream.Servers))
 	}
 
 	if cfg.Provider == config.ProviderAngie {
 		upstream.Keepalive = cfg.ResolveAngieKeepalive(len(upstream.Servers))
+	}
+
+	if cfg.Provider == config.ProviderCaddy {
+		upstream.Keepalive = cfg.ResolveCaddyKeepalive(len(upstream.Servers))
 	}
 
 	if err := prov.GenerateConfig(upstream); err != nil {

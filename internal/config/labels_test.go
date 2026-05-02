@@ -114,12 +114,92 @@ func TestParseLabelsNotEnabled(t *testing.T) {
 func TestParseLabelsInvalidProvider(t *testing.T) {
 	labels := map[string]string{
 		"release.enable":   "true",
-		"release.provider": "haproxy",
+		"release.provider": "unknown-lb",
 	}
 
 	_, err := ParseLabels(labels)
 	if err == nil {
 		t.Fatal("expected error for unknown provider")
+	}
+}
+
+func TestParseLabelsCaddy(t *testing.T) {
+	labels := map[string]string{
+		"release.enable":            "true",
+		"release.provider":          "caddy",
+		"release.strategy":          "linear",
+		"release.caddy.container":   "caddy",
+		"release.caddy.config_dir":  "/etc/caddy/conf.d",
+		"release.caddy.keepalive":   "5",
+	}
+
+	cfg, err := ParseLabels(labels)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Provider != ProviderCaddy {
+		t.Errorf("provider = %s, want caddy", cfg.Provider)
+	}
+	if cfg.CaddyContainer != "caddy" {
+		t.Errorf("caddy_container = %s, want caddy", cfg.CaddyContainer)
+	}
+	if cfg.CaddyConfigDir != "/etc/caddy/conf.d" {
+		t.Errorf("caddy_config_dir = %s, want /etc/caddy/conf.d", cfg.CaddyConfigDir)
+	}
+	if cfg.CaddyKeepalive != 5 {
+		t.Errorf("caddy_keepalive = %d, want 5", cfg.CaddyKeepalive)
+	}
+}
+
+func TestParseLabelsHAProxy(t *testing.T) {
+	labels := map[string]string{
+		"release.enable":              "true",
+		"release.provider":            "haproxy",
+		"release.strategy":            "linear",
+		"release.haproxy.container":   "haproxy",
+		"release.haproxy.config_dir":  "/etc/haproxy/conf.d",
+	}
+
+	cfg, err := ParseLabels(labels)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Provider != ProviderHAProxy {
+		t.Errorf("provider = %s, want haproxy", cfg.Provider)
+	}
+	if cfg.HAProxyContainer != "haproxy" {
+		t.Errorf("haproxy_container = %s, want haproxy", cfg.HAProxyContainer)
+	}
+	if cfg.HAProxyConfigDir != "/etc/haproxy/conf.d" {
+		t.Errorf("haproxy_config_dir = %s, want /etc/haproxy/conf.d", cfg.HAProxyConfigDir)
+	}
+}
+
+func TestParseLabelsNoneCanaryRejected(t *testing.T) {
+	labels := map[string]string{
+		"release.enable":   "true",
+		"release.provider": "none",
+		"release.strategy": "canary",
+	}
+
+	_, err := ParseLabels(labels)
+	if err == nil {
+		t.Fatal("expected error: provider=none with strategy=canary should be rejected")
+	}
+}
+
+func TestParseLabelsNoneBlueGreenRejected(t *testing.T) {
+	labels := map[string]string{
+		"release.enable":   "true",
+		"release.provider": "none",
+		"release.strategy": "blue-green",
+	}
+
+	_, err := ParseLabels(labels)
+	if err == nil {
+		t.Fatal("expected error: provider=none with strategy=blue-green should be rejected")
 	}
 }
 

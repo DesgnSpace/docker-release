@@ -50,14 +50,14 @@ func TestCanaryExecute(t *testing.T) {
 		t.Errorf("expected 1 health check, got %d", len(docker.healthyCalls))
 	}
 
-	// 25% → 50% → 75% → exits loop at 100%, then final config
-	// Steps: 25, 50, 75 (3 weighted configs) + 1 final = 4 total
-	if len(prov.configs) != 4 {
-		t.Errorf("expected 4 config generations (3 canary steps + final), got %d", len(prov.configs))
+	// 25% → 50% → 75% → exits loop at 100%, then final (with affinity) + stable (no affinity)
+	// Steps: 25, 50, 75 (3 weighted configs) + 1 final + 1 stable = 5 total
+	if len(prov.configs) != 5 {
+		t.Errorf("expected 5 config generations (3 canary steps + final + stable), got %d", len(prov.configs))
 	}
 
-	if prov.reloads != 4 {
-		t.Errorf("expected 4 reloads, got %d", prov.reloads)
+	if prov.reloads != 5 {
+		t.Errorf("expected 5 reloads, got %d", prov.reloads)
 	}
 
 	if len(docker.stopCalls) != 2 {
@@ -234,9 +234,9 @@ func TestCanaryLargeStep(t *testing.T) {
 		t.Fatalf("execute: %v", err)
 	}
 
-	// 50% → exits loop at 100%, then final = 2 configs
-	if len(prov.configs) != 2 {
-		t.Errorf("expected 2 configs (1 canary step + final), got %d", len(prov.configs))
+	// 50% → exits loop at 100%, then final + stable = 3 configs
+	if len(prov.configs) != 3 {
+		t.Errorf("expected 3 configs (1 canary step + final + stable), got %d", len(prov.configs))
 	}
 }
 

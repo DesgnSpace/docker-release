@@ -132,13 +132,12 @@ docker release status
 | `AngieConfigDir` | `release.angie.config_dir` | — |
 | `TraefikConfigDir` | `release.traefik.config_dir` | — |
 | `UpstreamName` | `release.upstream` | service name |
+| `Affinity` | `release.affinity` | `cookie` |
 | `BlueGreen.SoakTime` | `release.bg.soak_time` | `5m` |
 | `BlueGreen.GreenWeight` | `release.bg.green_weight` | `50` |
-| `BlueGreen.Affinity` | `release.bg.affinity` | `ip` |
 | `Canary.StartPercentage` | `release.canary.start_percentage` | `10` |
 | `Canary.Step` | `release.canary.step` | `20` |
 | `Canary.Interval` | `release.canary.interval` | `2m` |
-| `Canary.Affinity` | `release.canary.affinity` | `ip` |
 
 ### `internal/provider`
 
@@ -178,6 +177,14 @@ All providers follow the same pattern:
 1. Controller writes upstream config to a shared Docker volume
 2. Proxy reads that volume (mounted read-only) and hot-reloads
 
+**Session affinity mapping** — all strategies enable sticky sessions by default (`release.affinity: cookie`). Each provider implements it differently:
+
+| Affinity | Nginx (OSS) | Angie | Traefik | nginx-proxy |
+|----------|------------|-------|---------|-------------|
+| `cookie` | `ip_hash` (no sticky cookie in OSS) | `sticky cookie _srv path=/;` | `sticky.cookie: {}` | `ip_hash` |
+| `ip` | `ip_hash` | `ip_hash` | `sticky.cookie: {}` (no ip-hash in Traefik) | `ip_hash` |
+| `""` (off) | `least_conn` | `least_conn` | RoundRobin (no sticky) | `least_conn` |
+
 **Nginx / Angie:** generates `<service>_upstream.conf` in the shared dir, sends `nginx -s reload` / `angie -s reload` to the proxy container via `docker exec`.
 
 **Traefik:** generates `<service>-router.yml` dynamic config in the shared dir; Traefik watches via file provider.
@@ -189,6 +196,8 @@ All providers follow the same pattern:
 ---
 
 ## Deployment strategies
+
+All strategies enable session affinity by default (`release.affinity: cookie`). This ensures users stay on the same backend during a deployment. Set `release.affinity: ""` to disable, or `release.affinity: ip` for IP-based hashing.
 
 ### Linear
 Replaces containers one at a time: start new → wait healthy → add to upstream → mark old as draining → wait drain timeout → remove old. Repeats per replica.

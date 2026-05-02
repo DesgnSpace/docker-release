@@ -1,0 +1,26 @@
+services:
+  docker-release:
+    build:
+      context: ../../
+      dockerfile: Dockerfile
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["watch"]
+    depends_on:
+      worker:
+        condition: service_started
+
+  worker:
+    build:
+      context: ..
+      dockerfile: app.Dockerfile
+      args:
+        BUILD_ID: "worker-v1"
+    deploy:
+      replicas: 2
+    labels:
+      - "release.enable=true"
+      - "release.provider=none"
+      - "release.strategy=linear"
+      - "release.health_check_timeout=20s"
+      - "release.drain_timeout=2s"

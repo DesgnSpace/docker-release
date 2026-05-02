@@ -21,6 +21,8 @@ const (
 	ProviderNginx      ProviderType = "nginx"
 	ProviderAngie      ProviderType = "angie"
 	ProviderTraefik    ProviderType = "traefik"
+	ProviderCaddy      ProviderType = "caddy"
+	ProviderHAProxy    ProviderType = "haproxy"
 	ProviderNone       ProviderType = "none"
 )
 
@@ -38,6 +40,12 @@ type ServiceConfig struct {
 	AngieConfigDir     string
 	AngieKeepalive     int
 	TraefikConfigDir   string
+	CaddyContainer     string
+	CaddyConfigDir     string
+	CaddyPath          string
+	CaddyKeepalive     int
+	HAProxyContainer   string
+	HAProxyConfigDir   string
 	UpstreamName       string
 
 	BlueGreen BlueGreenConfig
@@ -74,6 +82,12 @@ func ParseLabels(labels map[string]string) (*ServiceConfig, error) {
 		AngieConfigDir:     getOr(labels, "release.angie.config_dir", ""),
 		AngieKeepalive:     parseIntOr(labels, "release.angie.keepalive", -1),
 		TraefikConfigDir:   getOr(labels, "release.traefik.config_dir", ""),
+		CaddyContainer:     getOr(labels, "release.caddy.container", ""),
+		CaddyConfigDir:     getOr(labels, "release.caddy.config_dir", ""),
+		CaddyPath:          getOr(labels, "release.caddy.path", ""),
+		CaddyKeepalive:     parseIntOr(labels, "release.caddy.keepalive", -1),
+		HAProxyContainer:   getOr(labels, "release.haproxy.container", ""),
+		HAProxyConfigDir:   getOr(labels, "release.haproxy.config_dir", ""),
 		UpstreamName:       getOr(labels, "release.upstream", ""),
 
 		BlueGreen: BlueGreenConfig{
@@ -97,9 +111,13 @@ func ParseLabels(labels map[string]string) (*ServiceConfig, error) {
 
 func (c *ServiceConfig) validate() error {
 	switch c.Provider {
-	case ProviderNginxProxy, ProviderNginx, ProviderAngie, ProviderTraefik, ProviderNone:
+	case ProviderNginxProxy, ProviderNginx, ProviderAngie, ProviderTraefik, ProviderCaddy, ProviderHAProxy, ProviderNone:
 	default:
 		return fmt.Errorf("unknown provider: %s", c.Provider)
+	}
+
+	if c.Provider == ProviderNone && (c.Strategy == StrategyCanary || c.Strategy == StrategyBlueGreen) {
+		return fmt.Errorf("provider=none requires strategy=linear (canary and blue-green need a load balancer)")
 	}
 
 	switch c.Strategy {
@@ -134,12 +152,28 @@ func (c *ServiceConfig) validate() error {
 		return fmt.Errorf("angie.keepalive must be >= 0, got %d", c.AngieKeepalive)
 	}
 
+	if c.CaddyKeepalive < -1 {
+		return fmt.Errorf("caddy.keepalive must be >= 0, got %d", c.CaddyKeepalive)
+	}
+
 	return nil
 }
 
 func (c *ServiceConfig) ResolveNginxKeepalive(serverCount int) int {
 	if c.NginxKeepalive >= 0 {
 		return c.NginxKeepalive
+	}
+
+	if serverCount <= 0 {
+		return 0
+	}
+
+	return serverCount + 1
+}
+
+func (c *ServiceConfig) ResolveCaddyKeepalive(serverCount int) int {
+	if c.CaddyKeepalive >= 0 {
+		return c.CaddyKeepalive
 	}
 
 	if serverCount <= 0 {

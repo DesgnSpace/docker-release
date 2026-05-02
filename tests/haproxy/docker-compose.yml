@@ -1,0 +1,87 @@
+services:
+  docker-release:
+    build:
+      context: ../../
+      dockerfile: Dockerfile
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - haproxy-config:/shared/haproxy-config:rw
+    command: ["watch"]
+    depends_on:
+      linear_app:
+        condition: service_started
+      canary_app:
+        condition: service_started
+      blue_green_app:
+        condition: service_started
+
+  haproxy:
+    image: haproxy:lts-alpine
+    ports:
+      - "8088:80"
+    volumes:
+      - haproxy-config:/etc/haproxy/conf.d:ro
+      - ./haproxy.cfg:/etc/haproxy/haproxy.cfg:ro
+    command: ["haproxy", "-W", "-f", "/etc/haproxy/haproxy.cfg", "-f", "/etc/haproxy/conf.d"]
+    depends_on:
+      docker-release:
+        condition: service_started
+
+  linear_app:
+    build:
+      context: ..
+      dockerfile: app.Dockerfile
+      args:
+        BUILD_ID: "linear"
+    deploy:
+      replicas: 2
+    labels:
+      - "release.enable=true"
+      - "release.provider=haproxy"
+      - "release.strategy=linear"
+      - "release.health_check_timeout=20s"
+      - "release.drain_timeout=5s"
+      - "release.haproxy.container=haproxy"
+      - "release.haproxy.config_dir=/shared/haproxy-config"
+
+  canary_app:
+    build:
+      context: ..
+      dockerfile: app.Dockerfile
+      args:
+        BUILD_ID: "canary"
+    deploy:
+      replicas: 2
+    labels:
+      - "release.enable=true"
+      - "release.provider=haproxy"
+      - "release.strategy=canary"
+      - "release.canary.start_percentage=25"
+      - "release.canary.step=25"
+      - "release.canary.interval=10s"
+      - "release.affinity=cookie"
+      - "release.health_check_timeout=20s"
+      - "release.haproxy.container=haproxy"
+      - "release.haproxy.config_dir=/shared/haproxy-config"
+
+  blue_green_app:
+    build:
+      context: ..
+      dockerfile: app.Dockerfile
+      args:
+        BUILD_ID: "blue_green"
+    deploy:
+      replicas: 2
+    labels:
+      - "release.enable=true"
+      - "release.provider=haproxy"
+      - "release.strategy=blue-green"
+      - "release.bg.soak_time=30s"
+      - "release.bg.green_weight=50"
+      - "release.affinity=ip"
+      - "release.health_check_timeout=20s"
+      - "release.haproxy.container=haproxy"
+      - "release.haproxy.config_dir=/shared/haproxy-config"
+
+volumes:
+  haproxy-config:
