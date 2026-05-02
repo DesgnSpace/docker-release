@@ -34,7 +34,12 @@ func main() {
 			printUsage()
 			return
 		}
-		runRelease(os.Args[2], len(os.Args) >= 4 && os.Args[3] == "--force")
+		opts, err := parseReleaseOptions(os.Args[3:])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+		runRelease(os.Args[2], opts)
 	case "rollback":
 		if len(os.Args) < 3 {
 			fmt.Fprintln(os.Stderr, "usage: dr rollback <service>")
@@ -67,16 +72,47 @@ func main() {
 		// Positional shorthand: dr <service> [--force]
 		// Anything not matching a reserved command is treated as a service name.
 		// If your service is named after a reserved word, use: dr release <service>
-		runRelease(os.Args[1], len(os.Args) >= 3 && os.Args[2] == "--force")
+		opts, err := parseReleaseOptions(os.Args[2:])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+		runRelease(os.Args[1], opts)
 	}
 }
 
-func runRelease(service string, force bool) {
+type releaseOptions struct {
+	force  bool
+	detach bool
+}
+
+func parseReleaseOptions(args []string) (releaseOptions, error) {
+	var opts releaseOptions
+
+	for _, arg := range args {
+		switch arg {
+		case "--force":
+			opts.force = true
+		case "--detach", "-d":
+			opts.detach = true
+		default:
+			return releaseOptions{}, fmt.Errorf("unknown release option %q", arg)
+		}
+	}
+
+	return opts, nil
+}
+
+func runRelease(service string, opts releaseOptions) {
 	run(func(ctrl *controller.Controller) error {
+		if opts.detach {
+			return ctrl.EnqueueRelease(service, opts.force)
+		}
+
 		ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 		defer cancel()
 
-		if err := ctrl.Release(ctx, service, force); err != nil {
+		if err := ctrl.Release(ctx, service, opts.force); err != nil {
 			return err
 		}
 
@@ -127,6 +163,7 @@ Commands:
   <service>                        Deploy the named service (alias for release)
   release <service> [--force]      Deploy a service explicitly
                                    --force overrides an in-progress deployment
+                                   --detach queues work for watch and returns
   rollback <service>               Roll back a service to its previous deployment
   status [service]                 Show deployment state
   watch                            Start the controller (run via compose, not manually)

@@ -60,12 +60,17 @@ func (c *Controller) Watch(ctx context.Context) error {
 	}
 
 	msgCh, errCh := c.docker.Events(ctx, c.project)
+	commandTicker := time.NewTicker(time.Second)
+	defer commandTicker.Stop()
 
 	c.generateInitialConfigs(ctx, services)
+	c.processReleaseCommands(ctx)
 
 	log.Println("watching for events... (ctrl+c to stop)")
 	for {
 		select {
+		case <-commandTicker.C:
+			c.processReleaseCommands(ctx)
 		case msg := <-msgCh:
 			switch msg.Action {
 			case "create", "start":
@@ -84,6 +89,44 @@ func (c *Controller) Watch(ctx context.Context) error {
 		case <-ctx.Done():
 			log.Println("shutting down")
 			return nil
+		}
+	}
+}
+
+func (c *Controller) EnqueueRelease(service string, force bool) error {
+	cmd, err := c.stateManager.EnqueueReleaseCommand(service, force)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("queued detached release for %s (%s)", service, cmd.ID)
+	return nil
+}
+
+func (c *Controller) processReleaseCommands(ctx context.Context) {
+	commands, err := c.stateManager.PendingReleaseCommands()
+	if err != nil {
+		log.Printf("error reading release commands: %v", err)
+		return
+	}
+
+	for _, cmd := range commands {
+		claimed, ok, err := c.stateManager.ClaimReleaseCommand(cmd)
+		if err != nil {
+			log.Printf("error claiming release command %s: %v", cmd.ID, err)
+			continue
+		}
+		if !ok {
+			continue
+		}
+
+		log.Printf("processing detached release for %s (%s)", claimed.Service, claimed.ID)
+		if err := c.Release(ctx, claimed.Service, claimed.Force); err != nil {
+			log.Printf("detached release failed for %s (%s): %v", claimed.Service, claimed.ID, err)
+		}
+
+		if err := c.stateManager.CompleteReleaseCommand(claimed); err != nil {
+			log.Printf("error completing release command %s: %v", claimed.ID, err)
 		}
 	}
 }
