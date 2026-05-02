@@ -59,7 +59,7 @@ See [label reference](#label-reference) for all options.
 One-line install — no repo clone needed:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/malico/docker-release/main/scripts/docker-release \
+curl -fsSL https://raw.githubusercontent.com/desgnspace/docker-release/main/scripts/docker-release \
   | sudo tee ~/.docker/cli-plugins/docker-release >/dev/null \
   && sudo chmod +x ~/.docker/cli-plugins/docker-release
 ```

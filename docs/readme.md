@@ -48,7 +48,7 @@ services:
 Install the CLI plugin once, then deploy:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/malico/docker-release/main/scripts/docker-release \
+curl -fsSL https://raw.githubusercontent.com/desgnspace/docker-release/main/scripts/docker-release \
   | sudo tee ~/.docker/cli-plugins/docker-release >/dev/null \
   && sudo chmod +x ~/.docker/cli-plugins/docker-release
 
@@ -75,7 +75,7 @@ docker release status app    # show state of one service
 One-line install from the repo — no clone needed:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/malico/docker-release/main/scripts/docker-release \
+curl -fsSL https://raw.githubusercontent.com/desgnspace/docker-release/main/scripts/docker-release \
   | sudo tee ~/.docker/cli-plugins/docker-release >/dev/null \
   && sudo chmod +x ~/.docker/cli-plugins/docker-release
 ```

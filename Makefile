@@ -1,7 +1,7 @@
 VERSION ?= $(shell v=$$(git tag --points-at HEAD 2>/dev/null | head -1); echo $${v:-dev})
 IMAGE   ?= malico/docker-release
 
-.PHONY: dev test build publish buildx-builder up-nginx up-angie up-traefik up-nginx-proxy down-nginx down-angie down-traefik down-nginx-proxy
+.PHONY: dev dev-remove test build publish buildx-builder up-nginx up-angie up-traefik up-nginx-proxy down-nginx down-angie down-traefik down-nginx-proxy
 
 build: buildx-builder
 	docker buildx build \
@@ -30,6 +30,10 @@ dev:
 	ln -sf $(PWD)/scripts/docker-release ~/.docker/cli-plugins/docker-release
 	chmod +x scripts/docker-release
 	@echo "Done — run: docker release <service>"
+
+dev-remove:
+	rm -f ~/.docker/cli-plugins/docker-release
+	@echo "Removed docker release dev plugin"
 
 test:
 	go test ./...
