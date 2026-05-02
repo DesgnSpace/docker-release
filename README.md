@@ -43,7 +43,7 @@ services:
       release.enable: "true"
       release.provider: nginx           # nginx | angie | traefik | nginx-proxy | caddy | haproxy | none
       release.strategy: linear          # linear | blue-green | canary
-      release.nginx.container: nginx
+      release.nginx.service: nginx
       release.nginx.config_dir: /shared/nginx-config
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost/health"]
@@ -123,7 +123,7 @@ services:
       release.enable: "true"
       release.provider: nginx
       release.strategy: linear
-      release.nginx.container: nginx
+      release.nginx.service: nginx
       release.nginx.config_dir: /shared/nginx-config
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost/health"]
@@ -182,7 +182,7 @@ services:
       release.enable: "true"
       release.provider: angie
       release.strategy: linear
-      release.angie.container: angie
+      release.angie.service: angie
       release.angie.config_dir: /shared/angie-config
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost/health"]
@@ -241,7 +241,7 @@ services:
       release.enable: "true"
       release.provider: caddy
       release.strategy: linear
-      release.caddy.container: caddy
+      release.caddy.service: caddy
       release.caddy.config_dir: /shared/caddy-config
       release.caddy.path: /app
     healthcheck:
@@ -326,7 +326,7 @@ services:
       release.enable: "true"
       release.provider: haproxy
       release.strategy: linear
-      release.haproxy.container: haproxy
+      release.haproxy.service: haproxy
       release.haproxy.config_dir: /shared/haproxy-config
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost/health"]
@@ -589,17 +589,17 @@ release.affinity: ip    # ip | cookie
 | `release.drain_timeout` | `10s` | Time to wait after removing from upstream before stopping |
 | `release.upstream` | _(service name)_ | Override the upstream block name |
 | `release.affinity` | — | Session affinity: `ip` or `cookie` (canary and blue-green) |
-| `release.nginx.container` | — | Nginx service name (for reload) |
+| `release.nginx.service` | — | Nginx service name (for reload) |
 | `release.nginx.config_dir` | — | Shared config volume path inside docker-release |
 | `release.nginx.keepalive` | _(auto)_ | Nginx keepalive connections per upstream |
-| `release.angie.container` | — | Angie service name |
+| `release.angie.service` | — | Angie service name |
 | `release.angie.config_dir` | — | Shared config volume path inside docker-release |
 | `release.angie.keepalive` | _(auto)_ | Angie keepalive connections per upstream |
-| `release.caddy.container` | — | Caddy service name |
+| `release.caddy.service` | — | Caddy service name |
 | `release.caddy.config_dir` | — | Shared config volume path inside docker-release |
 | `release.caddy.path` | — | URL path prefix (e.g. `/app`); generates `handle_path` block |
 | `release.caddy.keepalive` | _(auto)_ | Caddy keepalive idle conns per host |
-| `release.haproxy.container` | — | HAProxy service name |
+| `release.haproxy.service` | — | HAProxy service name |
 | `release.haproxy.config_dir` | — | Shared config volume path inside docker-release |
 | `release.traefik.config_dir` | — | Shared config volume path inside docker-release |
 | `release.bg.soak_time` | `5m` | Blue/Green: hold old containers this long before removal |

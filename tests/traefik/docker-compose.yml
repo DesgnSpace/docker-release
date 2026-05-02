@@ -26,16 +26,11 @@ services:
       - traefik-dynamic:/etc/traefik/dynamic:ro
 
   linear_app:
-    build:
-      context: ..
-      dockerfile: app.Dockerfile
-      args:
-        BUILD_ID: "linear"
+    image: traefik/whoami
+    environment:
+      - WHOAMI_NAME=linear
     deploy:
       replicas: 2
-    depends_on:
-      docker-release:
-        condition: service_started
     labels:
       - "release.enable=true"
       - "release.provider=traefik"
@@ -50,16 +45,11 @@ services:
       - "traefik.http.middlewares.strip-linear.stripprefix.prefixes=/linear"
 
   canary_app:
-    build:
-      context: ..
-      dockerfile: app.Dockerfile
-      args:
-        BUILD_ID: "canary"
+    image: traefik/whoami
+    environment:
+      - WHOAMI_NAME=canary
     deploy:
       replicas: 2
-    depends_on:
-      docker-release:
-        condition: service_started
     labels:
       - "release.enable=true"
       - "release.provider=traefik"
@@ -78,16 +68,11 @@ services:
       - "traefik.http.middlewares.strip-canary.stripprefix.prefixes=/canary"
 
   blue_green_app:
-    build:
-      context: ..
-      dockerfile: app.Dockerfile
-      args:
-        BUILD_ID: "blue_green"
+    image: traefik/whoami
+    environment:
+      - WHOAMI_NAME=blue_green
     deploy:
       replicas: 2
-    depends_on:
-      docker-release:
-        condition: service_started
     labels:
       - "release.enable=true"
       - "release.provider=traefik"

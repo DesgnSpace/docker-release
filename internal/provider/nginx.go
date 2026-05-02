@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/docker/docker/api/types"
 	"github.com/malico/docker-release/internal/docker"
 )
 
@@ -14,13 +15,15 @@ type NginxProvider struct {
 	configDir   string
 	docker      *docker.Client
 	serviceName string
+	project     string
 }
 
-func NewNginx(configDir string, dockerClient *docker.Client, serviceName string) *NginxProvider {
+func NewNginx(configDir string, dockerClient *docker.Client, serviceName, project string) *NginxProvider {
 	return &NginxProvider{
 		configDir:   configDir,
 		docker:      dockerClient,
 		serviceName: serviceName,
+		project:     project,
 	}
 }
 
@@ -50,22 +53,26 @@ func (p *NginxProvider) GenerateConfig(state *UpstreamState) error {
 }
 
 func (p *NginxProvider) Reload() error {
-	if p.serviceName == "" {
-		return nil
-	}
-
 	ctx := context.Background()
 
-	ctr, err := p.docker.FindContainerByService(ctx, p.serviceName)
+	ctr, err := p.resolveNginxContainer(ctx)
 	if err != nil {
-		return fmt.Errorf("resolving nginx container %q: %w", p.serviceName, err)
+		return fmt.Errorf("resolving nginx container: %w", err)
 	}
 
 	if !matchesImage(ctr.Image, "nginx", "alpine") {
-		return fmt.Errorf("container %q has unexpected image %q (want nginx or alpine-based)", p.serviceName, ctr.Image)
+		return fmt.Errorf("container %q has unexpected image %q (want nginx or alpine-based)", ctr.ID[:12], ctr.Image)
 	}
 
 	return p.docker.Exec(ctx, ctr.ID, []string{"nginx", "-s", "reload"})
+}
+
+func (p *NginxProvider) resolveNginxContainer(ctx context.Context) (types.Container, error) {
+	if p.serviceName != "" {
+		return p.docker.FindContainerByServiceInProject(ctx, p.project, p.serviceName)
+	}
+
+	return p.docker.FindContainerByImage(ctx, p.project, "nginx")
 }
 
 func renderUpstream(state *UpstreamState) string {

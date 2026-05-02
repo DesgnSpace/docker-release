@@ -154,7 +154,7 @@ func TestRenderUpstreamDisabledAffinity(t *testing.T) {
 
 func TestGenerateConfigWritesFile(t *testing.T) {
 	dir := t.TempDir()
-	p := NewNginx(dir, nil, "")
+	p := NewNginx(dir, nil, "", "")
 
 	state := &UpstreamState{
 		Service: "webapp",

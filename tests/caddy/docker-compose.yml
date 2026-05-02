@@ -7,13 +7,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - caddy-config:/shared/caddy-config:rw
     command: ["watch"]
-    depends_on:
-      linear_app:
-        condition: service_started
-      canary_app:
-        condition: service_started
-      blue_green_app:
-        condition: service_started
 
   caddy:
     image: caddy:alpine
@@ -27,11 +20,9 @@ services:
         condition: service_started
 
   linear_app:
-    build:
-      context: ..
-      dockerfile: app.Dockerfile
-      args:
-        BUILD_ID: "linear"
+    image: traefik/whoami
+    environment:
+      - WHOAMI_NAME=linear
     deploy:
       replicas: 2
     labels:
@@ -45,11 +36,9 @@ services:
       - "release.caddy.path=/linear"
 
   canary_app:
-    build:
-      context: ..
-      dockerfile: app.Dockerfile
-      args:
-        BUILD_ID: "canary"
+    image: traefik/whoami
+    environment:
+      - WHOAMI_NAME=canary
     deploy:
       replicas: 2
     labels:
@@ -66,11 +55,9 @@ services:
       - "release.caddy.path=/canary"
 
   blue_green_app:
-    build:
-      context: ..
-      dockerfile: app.Dockerfile
-      args:
-        BUILD_ID: "blue_green"
+    image: traefik/whoami
+    environment:
+      - WHOAMI_NAME=blue_green
     deploy:
       replicas: 2
     labels:

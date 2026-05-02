@@ -6,16 +6,11 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     command: ["watch"]
-    depends_on:
-      worker:
-        condition: service_started
 
   worker:
-    build:
-      context: ..
-      dockerfile: app.Dockerfile
-      args:
-        BUILD_ID: "worker-v1"
+    image: traefik/whoami
+    environment:
+      - WHOAMI_NAME=worker-v1
     deploy:
       replicas: 2
     labels:

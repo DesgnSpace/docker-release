@@ -31,7 +31,7 @@ services:
       - "release.enable=true"
       - "release.provider=nginx"
       - "release.strategy=linear"
-      - "release.nginx.container=nginx"
+      - "release.nginx.service=nginx"
       - "release.nginx.config_dir=/shared/nginx-config"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost/health"]
@@ -71,7 +71,7 @@ server {
 labels:
   - "release.enable=true"
   - "release.provider=nginx"
-  - "release.nginx.container=nginx"                 # Nginx service name
+  - "release.nginx.service=nginx"                   # Nginx service name
   - "release.nginx.config_dir=/shared/nginx-config" # Shared mount inside docker-release
 ```
 

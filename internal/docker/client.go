@@ -99,9 +99,16 @@ func (c *Client) Exec(ctx context.Context, containerID string, cmd []string) err
 }
 
 func (c *Client) FindContainerByService(ctx context.Context, serviceName string) (types.Container, error) {
+	return c.FindContainerByServiceInProject(ctx, "", serviceName)
+}
+
+func (c *Client) FindContainerByServiceInProject(ctx context.Context, project, serviceName string) (types.Container, error) {
 	f := filters.NewArgs()
 	f.Add("label", fmt.Sprintf("com.docker.compose.service=%s", serviceName))
 	f.Add("status", "running")
+	if project != "" {
+		f.Add("label", fmt.Sprintf("com.docker.compose.project=%s", project))
+	}
 
 	containers, err := c.api.ContainerList(ctx, container.ListOptions{Filters: f})
 	if err != nil {
@@ -109,10 +116,40 @@ func (c *Client) FindContainerByService(ctx context.Context, serviceName string)
 	}
 
 	if len(containers) == 0 {
+		if project != "" {
+			return types.Container{}, fmt.Errorf("no running container found for service %q in project %q", serviceName, project)
+		}
+
 		return types.Container{}, fmt.Errorf("no running container found for service %q", serviceName)
 	}
 
 	return containers[0], nil
+}
+
+func (c *Client) FindContainerByImage(ctx context.Context, project, keyword string) (types.Container, error) {
+	f := filters.NewArgs()
+	f.Add("status", "running")
+	if project != "" {
+		f.Add("label", fmt.Sprintf("com.docker.compose.project=%s", project))
+	}
+
+	containers, err := c.api.ContainerList(ctx, container.ListOptions{Filters: f})
+	if err != nil {
+		return types.Container{}, fmt.Errorf("listing containers: %w", err)
+	}
+
+	kw := strings.ToLower(keyword)
+	for _, ctr := range containers {
+		if strings.Contains(strings.ToLower(ctr.Image), kw) {
+			return ctr, nil
+		}
+	}
+
+	if project != "" {
+		return types.Container{}, fmt.Errorf("no running container found in project %q with image containing %q", project, keyword)
+	}
+
+	return types.Container{}, fmt.Errorf("no running container found with image containing %q", keyword)
 }
 
 func (c *Client) MaxServiceContainerNumber(ctx context.Context, project, service string) int {
@@ -151,7 +188,6 @@ func (c *Client) CreateContainerFromImage(ctx context.Context, ref types.Contain
 	cfg := &container.Config{
 		Image:        refInfo.Config.Image,
 		Labels:       labels,
-		Healthcheck:  refInfo.Config.Healthcheck,
 		ExposedPorts: refInfo.Config.ExposedPorts,
 		Env:          refInfo.Config.Env,
 	}

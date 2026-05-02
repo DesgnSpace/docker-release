@@ -36,7 +36,7 @@ services:
       release.enable: "true"
       release.provider: nginx
       release.strategy: linear
-      release.nginx.container: nginx
+      release.nginx.service: nginx
       release.nginx.config_dir: /shared/proxy-config
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost/health"]
@@ -167,9 +167,9 @@ Use Docker-native `healthcheck:` on app services. `docker-release` waits for Doc
 
 | Label | Description |
 |---|---|
-| `release.nginx.container` | Nginx service name (for reload signal) |
+| `release.nginx.service` | Nginx service name (for reload signal) |
 | `release.nginx.config_dir` | Shared config volume path inside docker-release |
-| `release.angie.container` | Angie service name |
+| `release.angie.service` | Angie service name |
 | `release.angie.config_dir` | Shared config volume path inside docker-release |
 
 ### Blue/Green
@@ -220,7 +220,7 @@ services:
       release.enable: "true"
       release.provider: nginx
       release.strategy: linear
-      release.nginx.container: nginx
+      release.nginx.service: nginx
       release.nginx.config_dir: /shared/proxy-config
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost/health"]

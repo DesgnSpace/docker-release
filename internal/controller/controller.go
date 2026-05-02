@@ -153,7 +153,6 @@ func (c *Controller) handleDie(ctx context.Context, containerID string, attrs ma
 		return
 	}
 
-
 	log.Printf("container %s died (service=%s, exit=%s)", containerID[:12], serviceName, exitCode)
 
 	c.refreshServiceConfig(ctx, serviceName)
@@ -338,7 +337,7 @@ func (c *Controller) resolveNginxProxyUpstream(ctx context.Context, cfg *config.
 func (c *Controller) createProvider(cfg *config.ServiceConfig) provider.Provider {
 	switch cfg.Provider {
 	case config.ProviderNginx:
-		return provider.NewNginx(cfg.NginxConfigDir, c.docker, cfg.NginxService)
+		return provider.NewNginx(cfg.NginxConfigDir, c.docker, cfg.NginxService, c.project)
 	case config.ProviderAngie:
 		return provider.NewAngie(cfg.AngieConfigDir, c.docker, cfg.AngieService)
 	case config.ProviderTraefik:
@@ -352,7 +351,7 @@ func (c *Controller) createProvider(cfg *config.ServiceConfig) provider.Provider
 	case config.ProviderNone:
 		return provider.NewNoop()
 	default:
-		return provider.NewNginx(cfg.NginxConfigDir, c.docker, cfg.NginxService)
+		return provider.NewNginx(cfg.NginxConfigDir, c.docker, cfg.NginxService, c.project)
 	}
 }
 

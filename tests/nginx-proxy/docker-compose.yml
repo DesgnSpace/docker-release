@@ -24,16 +24,14 @@ services:
         condition: service_started
 
   linear_app:
-    build:
-      context: ..
-      dockerfile: app.Dockerfile
-      args:
-        BUILD_ID: "linear"
+    image: traefik/whoami
+    environment:
+      - WHOAMI_NAME=linear
+      - VIRTUAL_HOST=localhost
+      - VIRTUAL_PATH=/linear/
+      - VIRTUAL_DEST=/
     deploy:
       replicas: 2
-    depends_on:
-      docker-release:
-        condition: service_started
     labels:
       - "release.enable=true"
       - "release.provider=nginx-proxy"
@@ -41,22 +39,16 @@ services:
       - "release.health_check_timeout=20s"
       - "release.drain_timeout=5s"
       - "release.nginx.config_dir=/shared/nginx-tmpl"
-    environment:
-      - VIRTUAL_HOST=localhost
-      - VIRTUAL_PATH=/linear/
-      - VIRTUAL_DEST=/
 
   canary_app:
-    build:
-      context: ..
-      dockerfile: app.Dockerfile
-      args:
-        BUILD_ID: "canary"
+    image: traefik/whoami
+    environment:
+      - WHOAMI_NAME=canary
+      - VIRTUAL_HOST=localhost
+      - VIRTUAL_PATH=/canary/
+      - VIRTUAL_DEST=/
     deploy:
       replicas: 2
-    depends_on:
-      docker-release:
-        condition: service_started
     labels:
       - "release.enable=true"
       - "release.provider=nginx-proxy"
@@ -67,22 +59,16 @@ services:
       - "release.affinity=cookie"
       - "release.health_check_timeout=20s"
       - "release.nginx.config_dir=/shared/nginx-tmpl"
-    environment:
-      - VIRTUAL_HOST=localhost
-      - VIRTUAL_PATH=/canary/
-      - VIRTUAL_DEST=/
 
   blue_green_app:
-    build:
-      context: ..
-      dockerfile: app.Dockerfile
-      args:
-        BUILD_ID: "blue_green"
+    image: traefik/whoami
+    environment:
+      - WHOAMI_NAME=blue_green
+      - VIRTUAL_HOST=localhost
+      - VIRTUAL_PATH=/bluegreen/
+      - VIRTUAL_DEST=/
     deploy:
       replicas: 2
-    depends_on:
-      docker-release:
-        condition: service_started
     labels:
       - "release.enable=true"
       - "release.provider=nginx-proxy"
@@ -92,10 +78,6 @@ services:
       - "release.affinity=ip"
       - "release.health_check_timeout=20s"
       - "release.nginx.config_dir=/shared/nginx-tmpl"
-    environment:
-      - VIRTUAL_HOST=localhost
-      - VIRTUAL_PATH=/bluegreen/
-      - VIRTUAL_DEST=/
 
 volumes:
   nginx-tmpl:

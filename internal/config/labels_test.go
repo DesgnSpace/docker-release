@@ -100,6 +100,38 @@ func TestParseLabelsDefaults(t *testing.T) {
 	}
 }
 
+func TestParseLabelsIgnoresNginxContainerLabel(t *testing.T) {
+	labels := map[string]string{
+		"release.enable":          "true",
+		"release.nginx.container": "nginx",
+	}
+
+	cfg, err := ParseLabels(labels)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.NginxService != "" {
+		t.Errorf("nginx_service = %s, want empty", cfg.NginxService)
+	}
+}
+
+func TestParseLabelsUsesNginxServiceLabel(t *testing.T) {
+	labels := map[string]string{
+		"release.enable":        "true",
+		"release.nginx.service": "nginx",
+	}
+
+	cfg, err := ParseLabels(labels)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.NginxService != "nginx" {
+		t.Errorf("nginx_service = %s, want nginx", cfg.NginxService)
+	}
+}
+
 func TestParseLabelsNotEnabled(t *testing.T) {
 	labels := map[string]string{
 		"release.enable": "false",
@@ -125,12 +157,12 @@ func TestParseLabelsInvalidProvider(t *testing.T) {
 
 func TestParseLabelsCaddy(t *testing.T) {
 	labels := map[string]string{
-		"release.enable":            "true",
-		"release.provider":          "caddy",
-		"release.strategy":          "linear",
-		"release.caddy.service":     "caddy",
-		"release.caddy.config_dir":  "/etc/caddy/conf.d",
-		"release.caddy.keepalive":   "5",
+		"release.enable":           "true",
+		"release.provider":         "caddy",
+		"release.strategy":         "linear",
+		"release.caddy.service":    "caddy",
+		"release.caddy.config_dir": "/etc/caddy/conf.d",
+		"release.caddy.keepalive":  "5",
 	}
 
 	cfg, err := ParseLabels(labels)
@@ -154,11 +186,11 @@ func TestParseLabelsCaddy(t *testing.T) {
 
 func TestParseLabelsHAProxy(t *testing.T) {
 	labels := map[string]string{
-		"release.enable":              "true",
-		"release.provider":            "haproxy",
-		"release.strategy":            "linear",
-		"release.haproxy.service":     "haproxy",
-		"release.haproxy.config_dir":  "/etc/haproxy/conf.d",
+		"release.enable":             "true",
+		"release.provider":           "haproxy",
+		"release.strategy":           "linear",
+		"release.haproxy.service":    "haproxy",
+		"release.haproxy.config_dir": "/etc/haproxy/conf.d",
 	}
 
 	cfg, err := ParseLabels(labels)
@@ -270,9 +302,9 @@ func TestParseLabelsInvalidAffinity(t *testing.T) {
 
 func TestParseLabelsConfigDirTraversal(t *testing.T) {
 	labels := map[string]string{
-		"release.enable":             "true",
-		"release.provider":           "nginx",
-		"release.nginx.config_dir":   "/etc/nginx/../passwd",
+		"release.enable":           "true",
+		"release.provider":         "nginx",
+		"release.nginx.config_dir": "/etc/nginx/../passwd",
 	}
 
 	_, err := ParseLabels(labels)

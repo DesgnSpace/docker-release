@@ -7,13 +7,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - nginx-config:/shared/nginx-config:rw
     command: ["watch"]
-    depends_on:
-      linear_app:
-        condition: service_started
-      canary_app:
-        condition: service_started
-      blue_green_app:
-        condition: service_started
 
   nginx:
     image: nginx:alpine
@@ -22,16 +15,20 @@ services:
     volumes:
       - nginx-config:/etc/nginx/conf.d/custom:ro
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
     depends_on:
       docker-release:
         condition: service_started
 
   linear_app:
-    build:
-      context: ..
-      dockerfile: app.Dockerfile
-      args:
-        BUILD_ID: "linear"
+    image: traefik/whoami
+    environment:
+      - WHOAMI_NAME=linear
     deploy:
       replicas: 2
     labels:
@@ -44,11 +41,9 @@ services:
       - "release.nginx.config_dir=/shared/nginx-config"
 
   canary_app:
-    build:
-      context: ..
-      dockerfile: app.Dockerfile
-      args:
-        BUILD_ID: "canary"
+    image: traefik/whoami
+    environment:
+      - WHOAMI_NAME=canary
     deploy:
       replicas: 2
     labels:
@@ -64,11 +59,9 @@ services:
       - "release.nginx.config_dir=/shared/nginx-config"
 
   blue_green_app:
-    build:
-      context: ..
-      dockerfile: app.Dockerfile
-      args:
-        BUILD_ID: "blue_green"
+    image: traefik/whoami
+    environment:
+      - WHOAMI_NAME=blue_green
     deploy:
       replicas: 2
     labels:
