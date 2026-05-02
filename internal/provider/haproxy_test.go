@@ -33,7 +33,7 @@ func TestHAProxyRenderBackendBasic(t *testing.T) {
 	if !strings.Contains(got, "server s2 172.18.0.6:80") {
 		t.Error("missing server 2")
 	}
-	if strings.Contains(got, "cookie SRVID") {
+	if strings.Contains(got, "cookie _srr_") {
 		t.Error("cookie directive should not appear without cookie affinity")
 	}
 }
@@ -50,7 +50,7 @@ func TestHAProxyRenderBackendCookieAffinity(t *testing.T) {
 
 	got := renderHAProxyBackend(state)
 
-	if !strings.Contains(got, "cookie SRVID insert indirect nocache") {
+	if !strings.Contains(got, "cookie _srr_a172cedcae insert indirect nocache") {
 		t.Error("missing cookie affinity directive")
 	}
 	if !strings.Contains(got, "server s1 172.18.0.5:80 cookie s1") {

@@ -1,3 +1,9 @@
 :80 {
+    header -Server
+    header -X-Powered-By
+    header -Via
+
+    encode gzip zstd
+
     import /etc/caddy/conf.d/*.caddy
 }

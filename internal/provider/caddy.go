@@ -118,7 +118,7 @@ func renderCaddyUpstream(state *UpstreamState, path string) string {
 	} else {
 		switch state.Affinity {
 		case "cookie":
-			fmt.Fprintf(&b, "        lb_policy cookie _srv\n")
+			fmt.Fprintf(&b, "        lb_policy cookie %s\n", stickyCookieName(state))
 		case "ip":
 			fmt.Fprintf(&b, "        lb_policy ip_hash\n")
 		default:

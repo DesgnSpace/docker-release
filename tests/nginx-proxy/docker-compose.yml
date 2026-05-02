@@ -30,8 +30,6 @@ services:
       - VIRTUAL_HOST=localhost
       - VIRTUAL_PATH=/linear/
       - VIRTUAL_DEST=/
-    deploy:
-      replicas: 2
     labels:
       - "release.enable=true"
       - "release.provider=nginx-proxy"
@@ -47,8 +45,6 @@ services:
       - VIRTUAL_HOST=localhost
       - VIRTUAL_PATH=/canary/
       - VIRTUAL_DEST=/
-    deploy:
-      replicas: 2
     labels:
       - "release.enable=true"
       - "release.provider=nginx-proxy"
@@ -67,8 +63,6 @@ services:
       - VIRTUAL_HOST=localhost
       - VIRTUAL_PATH=/bluegreen/
       - VIRTUAL_DEST=/
-    deploy:
-      replicas: 2
     labels:
       - "release.enable=true"
       - "release.provider=nginx-proxy"

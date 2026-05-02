@@ -44,7 +44,7 @@ func TestCaddyRenderUpstreamCookieAffinity(t *testing.T) {
 
 	got := renderCaddyUpstream(state, "")
 
-	if !strings.Contains(got, "lb_policy cookie _srv") {
+	if !strings.Contains(got, "lb_policy cookie _srr_a172cedcae") {
 		t.Error("missing cookie affinity policy")
 	}
 	if strings.Contains(got, "round_robin") {

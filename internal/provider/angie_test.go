@@ -68,7 +68,7 @@ func TestAngieRenderUpstreamCookieAffinity(t *testing.T) {
 
 	got := renderAngieUpstream(state)
 
-	if !strings.Contains(got, "sticky cookie _srv path=/;") {
+	if !strings.Contains(got, "sticky cookie _srr_a172cedcae path=/;") {
 		t.Error("cookie affinity should use sticky cookie for Angie")
 	}
 	if strings.Contains(got, "ip_hash") {
@@ -115,7 +115,7 @@ func TestAngieCookieAffinityWithWeights(t *testing.T) {
 
 	got := renderAngieUpstream(state)
 
-	if !strings.Contains(got, "sticky cookie _srv path=/;") {
+	if !strings.Contains(got, "sticky cookie _srr_a172cedcae path=/;") {
 		t.Error("missing sticky cookie for Angie")
 	}
 	if !strings.Contains(got, "server 172.18.0.5:80 weight=90;") {

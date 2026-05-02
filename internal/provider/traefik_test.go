@@ -57,7 +57,8 @@ func TestRenderTraefikWithCookieAffinity(t *testing.T) {
 
 	expects := []string{
 		"sticky:",
-		"cookie: {}",
+		"cookie:",
+		`name: "_srr_a172cedcae"`,
 	}
 
 	for _, want := range expects {
@@ -90,7 +91,8 @@ func TestRenderTraefikWeighted(t *testing.T) {
 		`url: "http://172.18.0.6:80"`,
 		`url: "http://172.18.0.8:80"`,
 		"sticky:",
-		"cookie: {}",
+		"cookie:",
+		`name: "_srr_a172cedcae"`,
 	}
 
 	for _, want := range expects {
@@ -111,11 +113,11 @@ func TestRenderTraefikWithIPAffinity(t *testing.T) {
 
 	got := renderTraefikYAML(state)
 
-	if !strings.Contains(got, "sticky:") {
-		t.Error("ip affinity should fall back to sticky cookie in Traefik")
+	if !strings.Contains(got, `strategy: "hrw"`) {
+		t.Error("ip affinity should use Traefik HRW strategy")
 	}
-	if !strings.Contains(got, "cookie: {}") {
-		t.Error("ip affinity should use sticky cookie in Traefik")
+	if strings.Contains(got, "sticky:") || strings.Contains(got, "cookie:") {
+		t.Error("ip affinity should not use sticky cookie in Traefik")
 	}
 }
 
@@ -153,7 +155,7 @@ func TestRenderTraefikWeightedBlueGreenCutover(t *testing.T) {
 	got := renderTraefikYAML(state)
 
 	expects := []string{
-		"weighted:",
+		"highestRandomWeight:",
 		"blue_green_app-stable:",
 		"blue_green_app-canary:",
 		"weight: 50",

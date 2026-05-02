@@ -1,6 +1,8 @@
 package provider
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"regexp"
 	"strings"
@@ -30,6 +32,11 @@ func matchesImage(image string, keywords ...string) bool {
 	return false
 }
 
+func stickyCookieName(state *UpstreamState) string {
+	h := sha256.Sum256([]byte(state.ResolveUpstreamName()))
+	return "_srr_" + hex.EncodeToString(h[:])[:10]
+}
+
 type Server struct {
 	Addr   string // e.g. "172.18.0.5:80"
 	Weight int    // 0 means no weight directive
@@ -42,9 +49,9 @@ type UpstreamState struct {
 	UpstreamName string // overrides Service for upstream naming (e.g. VIRTUAL_HOST for nginx-proxy)
 	Servers      []Server
 	Affinity     string // "cookie" (default), "ip", or "" (disabled)
-	             // cookie: nginx→ip_hash (OSS has no sticky), angie→sticky cookie, traefik→sticky.cookie
-	             // ip: nginx/angie→ip_hash, traefik→sticky.cookie (no ip-hash in traefik)
-	Keepalive    int    // 0 disables keepalive
+	// cookie: nginx→ip_hash (OSS has no sticky), angie/caddy/traefik/haproxy→sticky cookie
+	// ip: nginx/angie/nginx-proxy→ip_hash, traefik→hrw, caddy→ip_hash, haproxy→source
+	Keepalive int // 0 disables keepalive
 }
 
 func (u *UpstreamState) ResolveUpstreamName() string {

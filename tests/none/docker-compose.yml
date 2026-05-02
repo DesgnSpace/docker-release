@@ -11,8 +11,6 @@ services:
     image: traefik/whoami
     environment:
       - WHOAMI_NAME=worker-v1
-    deploy:
-      replicas: 2
     labels:
       - "release.enable=true"
       - "release.provider=none"

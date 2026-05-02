@@ -83,7 +83,7 @@ func renderHAProxyBackend(state *UpstreamState) string {
 	switch state.Affinity {
 	case "cookie":
 		fmt.Fprintf(&b, "    balance roundrobin\n")
-		fmt.Fprintf(&b, "    cookie SRVID insert indirect nocache\n")
+		fmt.Fprintf(&b, "    cookie %s insert indirect nocache\n", stickyCookieName(state))
 	case "ip":
 		fmt.Fprintf(&b, "    balance source\n")
 	default:

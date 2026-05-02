@@ -73,9 +73,11 @@ func renderLoadBalancerService(b *strings.Builder, state *UpstreamState) {
 	fmt.Fprintf(b, "    %s:\n", state.Service)
 	b.WriteString("      loadBalancer:\n")
 
-	if state.Affinity != "" {
-		b.WriteString("        sticky:\n")
-		b.WriteString("          cookie: {}\n")
+	switch state.Affinity {
+	case "cookie":
+		writeTraefikStickyCookie(b, stickyCookieName(state))
+	case "ip":
+		b.WriteString("        strategy: \"hrw\"\n")
 	}
 
 	b.WriteString("        servers:\n")
@@ -94,7 +96,11 @@ func renderWeightedService(b *strings.Builder, state *UpstreamState) {
 	canaryName := state.Service + "-canary"
 
 	fmt.Fprintf(b, "    %s:\n", state.Service)
-	b.WriteString("      weighted:\n")
+	if state.Affinity == "ip" {
+		b.WriteString("      highestRandomWeight:\n")
+	} else {
+		b.WriteString("      weighted:\n")
+	}
 	b.WriteString("        services:\n")
 
 	var stableServers, canaryServers []Server
@@ -156,9 +162,8 @@ func renderWeightedService(b *strings.Builder, state *UpstreamState) {
 		fmt.Fprintf(b, "            weight: %d\n", canaryWeight)
 	}
 
-	if state.Affinity != "" {
-		b.WriteString("        sticky:\n")
-		b.WriteString("          cookie: {}\n")
+	if state.Affinity == "cookie" {
+		writeTraefikStickyCookie(b, stickyCookieName(state))
 	}
 
 	fmt.Fprintf(b, "    %s:\n", stableName)
@@ -176,4 +181,10 @@ func renderWeightedService(b *strings.Builder, state *UpstreamState) {
 			fmt.Fprintf(b, "          - url: \"http://%s\"\n", s.Addr)
 		}
 	}
+}
+
+func writeTraefikStickyCookie(b *strings.Builder, name string) {
+	b.WriteString("        sticky:\n")
+	b.WriteString("          cookie:\n")
+	fmt.Fprintf(b, "            name: %q\n", name)
 }

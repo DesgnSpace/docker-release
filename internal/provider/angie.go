@@ -82,7 +82,7 @@ func renderAngieUpstream(state *UpstreamState) string {
 
 	switch state.Affinity {
 	case "cookie":
-		b.WriteString("    sticky cookie _srv path=/;\n")
+		fmt.Fprintf(&b, "    sticky cookie %s path=/;\n", stickyCookieName(state))
 	case "ip":
 		fmt.Fprintf(&b, "    ip_hash;\n")
 	default:

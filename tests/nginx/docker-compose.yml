@@ -29,8 +29,6 @@ services:
     image: traefik/whoami
     environment:
       - WHOAMI_NAME=linear
-    deploy:
-      replicas: 2
     labels:
       - "release.enable=true"
       - "release.provider=nginx"
@@ -44,8 +42,6 @@ services:
     image: traefik/whoami
     environment:
       - WHOAMI_NAME=canary
-    deploy:
-      replicas: 2
     labels:
       - "release.enable=true"
       - "release.provider=nginx"
@@ -62,8 +58,6 @@ services:
     image: traefik/whoami
     environment:
       - WHOAMI_NAME=blue_green
-    deploy:
-      replicas: 2
     labels:
       - "release.enable=true"
       - "release.provider=nginx"
