@@ -7,8 +7,22 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sync"
 	"time"
 )
+
+var validName = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
+
+func validateName(name string) error {
+	if name == "" {
+		return nil
+	}
+	if !validName.MatchString(name) {
+		return fmt.Errorf("invalid name %q: must match [a-zA-Z0-9._-]+", name)
+	}
+	return nil
+}
 
 type Status string
 
@@ -51,13 +65,38 @@ type Containers struct {
 type Manager struct {
 	dir     string
 	project string
+
+	mu    sync.Mutex
+	locks map[string]*sync.Mutex
 }
 
 func NewManager(dir, project string) *Manager {
-	return &Manager{dir: dir, project: project}
+	return &Manager{
+		dir:     dir,
+		project: project,
+		locks:   make(map[string]*sync.Mutex),
+	}
+}
+
+func (m *Manager) serviceLock(service string) *sync.Mutex {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	mu, ok := m.locks[service]
+	if !ok {
+		mu = &sync.Mutex{}
+		m.locks[service] = mu
+	}
+	return mu
 }
 
 func (m *Manager) Load(service string) (*DeploymentState, error) {
+	if err := validateName(service); err != nil {
+		return nil, err
+	}
+	if err := validateName(m.project); err != nil {
+		return nil, err
+	}
+
 	path := m.path(service)
 
 	data, err := os.ReadFile(path)
@@ -80,6 +119,17 @@ func (m *Manager) Load(service string) (*DeploymentState, error) {
 }
 
 func (m *Manager) Save(s *DeploymentState) error {
+	if err := validateName(s.Service); err != nil {
+		return err
+	}
+	if err := validateName(m.project); err != nil {
+		return err
+	}
+
+	lock := m.serviceLock(s.Service)
+	lock.Lock()
+	defer lock.Unlock()
+
 	s.UpdatedAt = time.Now()
 
 	if err := os.MkdirAll(m.dir, 0o755); err != nil {
@@ -92,7 +142,7 @@ func (m *Manager) Save(s *DeploymentState) error {
 	}
 
 	tmp := m.path(s.Service) + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		return fmt.Errorf("writing temp state file: %w", err)
 	}
 

@@ -1,5 +1,35 @@
 package provider
 
+import (
+	"fmt"
+	"regexp"
+	"strings"
+)
+
+var validName = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
+
+func (u *UpstreamState) Validate() error {
+	if !validName.MatchString(u.Service) {
+		return fmt.Errorf("service name %q contains invalid characters", u.Service)
+	}
+	if name := u.ResolveUpstreamName(); !validName.MatchString(name) {
+		return fmt.Errorf("upstream name %q contains invalid characters", name)
+	}
+	return nil
+}
+
+// matchesImage checks if image (e.g. "nginx:alpine") contains any of the expected keywords.
+// Used in Reload to guard against reloading the wrong container.
+func matchesImage(image string, keywords ...string) bool {
+	img := strings.ToLower(image)
+	for _, kw := range keywords {
+		if strings.Contains(img, strings.ToLower(kw)) {
+			return true
+		}
+	}
+	return false
+}
+
 type Server struct {
 	Addr   string // e.g. "172.18.0.5:80"
 	Weight int    // 0 means no weight directive

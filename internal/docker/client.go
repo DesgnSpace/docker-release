@@ -98,21 +98,21 @@ func (c *Client) Exec(ctx context.Context, containerID string, cmd []string) err
 	return c.api.ContainerExecStart(ctx, exec.ID, container.ExecStartOptions{})
 }
 
-func (c *Client) FindContainerByService(ctx context.Context, serviceName string) (string, error) {
+func (c *Client) FindContainerByService(ctx context.Context, serviceName string) (types.Container, error) {
 	f := filters.NewArgs()
 	f.Add("label", fmt.Sprintf("com.docker.compose.service=%s", serviceName))
 	f.Add("status", "running")
 
 	containers, err := c.api.ContainerList(ctx, container.ListOptions{Filters: f})
 	if err != nil {
-		return "", fmt.Errorf("listing containers: %w", err)
+		return types.Container{}, fmt.Errorf("listing containers: %w", err)
 	}
 
 	if len(containers) == 0 {
-		return "", fmt.Errorf("no running container found for service %q", serviceName)
+		return types.Container{}, fmt.Errorf("no running container found for service %q", serviceName)
 	}
 
-	return containers[0].ID, nil
+	return containers[0], nil
 }
 
 func (c *Client) MaxServiceContainerNumber(ctx context.Context, project, service string) int {

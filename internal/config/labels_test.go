@@ -17,7 +17,7 @@ func TestParseLabels(t *testing.T) {
 		"release.canary.start_percentage": "25",
 		"release.canary.step":             "10",
 		"release.canary.interval":         "1m",
-		"release.nginx.container":         "my-nginx",
+		"release.nginx.service":           "my-nginx",
 		"release.nginx.keepalive":         "20",
 	}
 
@@ -26,8 +26,8 @@ func TestParseLabels(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if cfg.NginxContainer != "my-nginx" {
-		t.Errorf("nginx_container = %s, want my-nginx", cfg.NginxContainer)
+	if cfg.NginxService != "my-nginx" {
+		t.Errorf("nginx_service = %s, want my-nginx", cfg.NginxService)
 	}
 	if cfg.Provider != ProviderNginxProxy {
 		t.Errorf("provider = %s, want nginx-proxy", cfg.Provider)
@@ -92,8 +92,8 @@ func TestParseLabelsDefaults(t *testing.T) {
 	if cfg.Canary.Step != 20 {
 		t.Errorf("default step = %d, want 20", cfg.Canary.Step)
 	}
-	if cfg.NginxContainer != "" {
-		t.Errorf("default nginx_container = %s, want empty", cfg.NginxContainer)
+	if cfg.NginxService != "" {
+		t.Errorf("default nginx_service = %s, want empty", cfg.NginxService)
 	}
 	if cfg.NginxKeepalive != -1 {
 		t.Errorf("default nginx_keepalive = %d, want -1", cfg.NginxKeepalive)
@@ -128,7 +128,7 @@ func TestParseLabelsCaddy(t *testing.T) {
 		"release.enable":            "true",
 		"release.provider":          "caddy",
 		"release.strategy":          "linear",
-		"release.caddy.container":   "caddy",
+		"release.caddy.service":     "caddy",
 		"release.caddy.config_dir":  "/etc/caddy/conf.d",
 		"release.caddy.keepalive":   "5",
 	}
@@ -141,8 +141,8 @@ func TestParseLabelsCaddy(t *testing.T) {
 	if cfg.Provider != ProviderCaddy {
 		t.Errorf("provider = %s, want caddy", cfg.Provider)
 	}
-	if cfg.CaddyContainer != "caddy" {
-		t.Errorf("caddy_container = %s, want caddy", cfg.CaddyContainer)
+	if cfg.CaddyService != "caddy" {
+		t.Errorf("caddy_service = %s, want caddy", cfg.CaddyService)
 	}
 	if cfg.CaddyConfigDir != "/etc/caddy/conf.d" {
 		t.Errorf("caddy_config_dir = %s, want /etc/caddy/conf.d", cfg.CaddyConfigDir)
@@ -157,7 +157,7 @@ func TestParseLabelsHAProxy(t *testing.T) {
 		"release.enable":              "true",
 		"release.provider":            "haproxy",
 		"release.strategy":            "linear",
-		"release.haproxy.container":   "haproxy",
+		"release.haproxy.service":     "haproxy",
 		"release.haproxy.config_dir":  "/etc/haproxy/conf.d",
 	}
 
@@ -169,8 +169,8 @@ func TestParseLabelsHAProxy(t *testing.T) {
 	if cfg.Provider != ProviderHAProxy {
 		t.Errorf("provider = %s, want haproxy", cfg.Provider)
 	}
-	if cfg.HAProxyContainer != "haproxy" {
-		t.Errorf("haproxy_container = %s, want haproxy", cfg.HAProxyContainer)
+	if cfg.HAProxyService != "haproxy" {
+		t.Errorf("haproxy_service = %s, want haproxy", cfg.HAProxyService)
 	}
 	if cfg.HAProxyConfigDir != "/etc/haproxy/conf.d" {
 		t.Errorf("haproxy_config_dir = %s, want /etc/haproxy/conf.d", cfg.HAProxyConfigDir)
@@ -265,6 +265,46 @@ func TestParseLabelsInvalidAffinity(t *testing.T) {
 	_, err := ParseLabels(labels)
 	if err == nil {
 		t.Fatal("expected error for invalid affinity")
+	}
+}
+
+func TestParseLabelsConfigDirTraversal(t *testing.T) {
+	labels := map[string]string{
+		"release.enable":             "true",
+		"release.provider":           "nginx",
+		"release.nginx.config_dir":   "/etc/nginx/../passwd",
+	}
+
+	_, err := ParseLabels(labels)
+	if err == nil {
+		t.Fatal("expected error for config_dir with path traversal")
+	}
+}
+
+func TestParseLabelsUpstreamNameInjection(t *testing.T) {
+	labels := map[string]string{
+		"release.enable":   "true",
+		"release.upstream": `app"; rm -rf /`,
+	}
+
+	_, err := ParseLabels(labels)
+	if err == nil {
+		t.Fatal("expected error for upstream name with invalid characters")
+	}
+}
+
+func TestParseLabelsValidUpstreamName(t *testing.T) {
+	labels := map[string]string{
+		"release.enable":   "true",
+		"release.upstream": "app.example.com",
+	}
+
+	cfg, err := ParseLabels(labels)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.UpstreamName != "app.example.com" {
+		t.Errorf("upstream = %s, want app.example.com", cfg.UpstreamName)
 	}
 }
 

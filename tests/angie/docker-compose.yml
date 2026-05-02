@@ -40,7 +40,7 @@ services:
       - "release.strategy=linear"
       - "release.health_check_timeout=20s"
       - "release.drain_timeout=5s"
-      - "release.angie.container=angie"
+      - "release.angie.service=angie"
       - "release.angie.config_dir=/shared/angie-config"
 
   canary_app:
@@ -60,7 +60,7 @@ services:
       - "release.canary.interval=10s"
       - "release.affinity=cookie"
       - "release.health_check_timeout=20s"
-      - "release.angie.container=angie"
+      - "release.angie.service=angie"
       - "release.angie.config_dir=/shared/angie-config"
 
   blue_green_app:
@@ -79,7 +79,7 @@ services:
       - "release.bg.green_weight=50"
       - "release.affinity=ip"
       - "release.health_check_timeout=20s"
-      - "release.angie.container=angie"
+      - "release.angie.service=angie"
       - "release.angie.config_dir=/shared/angie-config"
 
 volumes:

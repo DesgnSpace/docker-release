@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -226,6 +227,58 @@ func TestLegacyJSONBackwardCompat(t *testing.T) {
 
 	if !loaded.IsStale(DefaultStaleThreshold) {
 		t.Error("legacy in_progress file should be treated as stale")
+	}
+}
+
+func TestSaveRejectsPathTraversal(t *testing.T) {
+	dir := t.TempDir()
+	mgr := NewManager(dir, "")
+
+	s := &DeploymentState{Service: "../evil", Status: StatusIdle}
+	if err := mgr.Save(s); err == nil {
+		t.Fatal("expected error for service name with path traversal")
+	}
+
+	s2 := &DeploymentState{Service: "valid-service", Status: StatusIdle}
+	mgr2 := NewManager(dir, "../evil-project")
+	if err := mgr2.Save(s2); err == nil {
+		t.Fatal("expected error for project name with path traversal")
+	}
+}
+
+func TestLoadRejectsPathTraversal(t *testing.T) {
+	dir := t.TempDir()
+	mgr := NewManager(dir, "")
+
+	if _, err := mgr.Load("../evil"); err == nil {
+		t.Fatal("expected error for service name with path traversal")
+	}
+}
+
+func TestSaveConcurrentSameService(t *testing.T) {
+	dir := t.TempDir()
+	mgr := NewManager(dir, "")
+
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func(weight int) {
+			defer wg.Done()
+			_ = mgr.Save(&DeploymentState{
+				Service:       "webapp",
+				Status:        StatusInProgress,
+				CurrentWeight: weight,
+			})
+		}(i)
+	}
+	wg.Wait()
+
+	loaded, err := mgr.Load("webapp")
+	if err != nil {
+		t.Fatalf("load after concurrent saves: %v", err)
+	}
+	if loaded.Service != "webapp" {
+		t.Errorf("service = %s, want webapp", loaded.Service)
 	}
 }
 

@@ -16,6 +16,10 @@ func NewTraefik(configDir string) *TraefikProvider {
 }
 
 func (p *TraefikProvider) GenerateConfig(state *UpstreamState) error {
+	if err := state.Validate(); err != nil {
+		return err
+	}
+
 	conf := renderTraefikYAML(state)
 
 	if err := os.MkdirAll(p.configDir, 0o755); err != nil {

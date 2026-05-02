@@ -42,7 +42,7 @@ func (m *Manager) EnqueueReleaseCommand(service string, force bool) (*ReleaseCom
 
 	path := filepath.Join(dir, cmd.ID+".json")
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		return nil, fmt.Errorf("writing temp command file: %w", err)
 	}
 

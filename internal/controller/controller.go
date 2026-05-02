@@ -21,13 +21,18 @@ import (
 	"github.com/docker/docker/api/types"
 )
 
+type activeDeployment struct {
+	id     string
+	cancel context.CancelFunc
+}
+
 type Controller struct {
 	docker       *docker.Client
 	stateManager *state.Manager
 	project      string
 
 	mu             sync.Mutex
-	deployments    map[string]context.CancelFunc
+	deployments    map[string]activeDeployment
 	nginxProxyProv *provider.NginxProxyProvider
 	wg             sync.WaitGroup
 }
@@ -36,7 +41,7 @@ func New(dockerClient *docker.Client, stateManager *state.Manager, project strin
 	return &Controller{
 		docker:       dockerClient,
 		stateManager: stateManager,
-		deployments:  make(map[string]context.CancelFunc),
+		deployments:  make(map[string]activeDeployment),
 		project:      project,
 	}
 }
@@ -148,6 +153,7 @@ func (c *Controller) handleDie(ctx context.Context, containerID string, attrs ma
 		return
 	}
 
+
 	log.Printf("container %s died (service=%s, exit=%s)", containerID[:12], serviceName, exitCode)
 
 	c.refreshServiceConfig(ctx, serviceName)
@@ -215,17 +221,22 @@ func (c *Controller) handleStart(ctx context.Context, containerID string, attrs 
 
 	c.resolveNginxProxyUpstream(ctx, cfg, new)
 
-	go c.deploy(ctx, serviceName, cfg, old, new)
+	c.wg.Add(1)
+	go func() {
+		defer c.wg.Done()
+		c.deploy(ctx, serviceName, cfg, old, new)
+	}()
 }
 
 func (c *Controller) deploy(parentCtx context.Context, serviceName string, cfg *config.ServiceConfig, oldContainers, newContainers []types.Container) {
 	c.mu.Lock()
-	if cancel, ok := c.deployments[serviceName]; ok {
-		cancel()
+	if d, ok := c.deployments[serviceName]; ok {
+		d.cancel()
 	}
 
 	ctx, cancel := context.WithCancel(parentCtx)
-	c.deployments[serviceName] = cancel
+	deployID := state.GenerateDeploymentID()
+	c.deployments[serviceName] = activeDeployment{id: deployID, cancel: cancel}
 	c.mu.Unlock()
 
 	ds := &state.DeploymentState{
@@ -239,7 +250,9 @@ func (c *Controller) deploy(parentCtx context.Context, serviceName string, cfg *
 
 	defer func() {
 		c.mu.Lock()
-		delete(c.deployments, serviceName)
+		if d, ok := c.deployments[serviceName]; ok && d.id == deployID {
+			delete(c.deployments, serviceName)
+		}
 		c.mu.Unlock()
 		cancel()
 	}()
@@ -296,7 +309,7 @@ func (c *Controller) deploy(parentCtx context.Context, serviceName string, cfg *
 		log.Printf("deployment failed for %s: %v", serviceName, err)
 
 		log.Printf("initiating rollback for %s", serviceName)
-		if rbErr := strat.Rollback(context.Background(), d); rbErr != nil {
+		if rbErr := strat.Rollback(ctx, d); rbErr != nil {
 			log.Printf("rollback failed for %s: %v", serviceName, rbErr)
 		}
 		return
@@ -325,25 +338,28 @@ func (c *Controller) resolveNginxProxyUpstream(ctx context.Context, cfg *config.
 func (c *Controller) createProvider(cfg *config.ServiceConfig) provider.Provider {
 	switch cfg.Provider {
 	case config.ProviderNginx:
-		return provider.NewNginx(cfg.NginxConfigDir, c.docker, cfg.NginxContainer)
+		return provider.NewNginx(cfg.NginxConfigDir, c.docker, cfg.NginxService)
 	case config.ProviderAngie:
-		return provider.NewAngie(cfg.AngieConfigDir, c.docker, cfg.AngieContainer)
+		return provider.NewAngie(cfg.AngieConfigDir, c.docker, cfg.AngieService)
 	case config.ProviderTraefik:
 		return provider.NewTraefik(cfg.TraefikConfigDir)
 	case config.ProviderNginxProxy:
 		return c.getNginxProxyProvider(cfg)
 	case config.ProviderCaddy:
-		return provider.NewCaddy(cfg.CaddyConfigDir, c.docker, cfg.CaddyContainer, cfg.CaddyPath)
+		return provider.NewCaddy(cfg.CaddyConfigDir, c.docker, cfg.CaddyService, cfg.CaddyPath)
 	case config.ProviderHAProxy:
-		return provider.NewHAProxy(cfg.HAProxyConfigDir, c.docker, cfg.HAProxyContainer)
+		return provider.NewHAProxy(cfg.HAProxyConfigDir, c.docker, cfg.HAProxyService)
 	case config.ProviderNone:
 		return provider.NewNoop()
 	default:
-		return provider.NewNginx(cfg.NginxConfigDir, c.docker, cfg.NginxContainer)
+		return provider.NewNginx(cfg.NginxConfigDir, c.docker, cfg.NginxService)
 	}
 }
 
 func (c *Controller) getNginxProxyProvider(cfg *config.ServiceConfig) provider.Provider {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	if c.nginxProxyProv != nil {
 		return c.nginxProxyProv
 	}
@@ -970,7 +986,9 @@ func (c *Controller) refreshServiceConfig(ctx context.Context, serviceName strin
 }
 
 func (c *Controller) refreshServiceConfigAfter(ctx context.Context, serviceName string, delay time.Duration) {
+	c.wg.Add(1)
 	go func() {
+		defer c.wg.Done()
 		select {
 		case <-time.After(delay):
 		case <-ctx.Done():

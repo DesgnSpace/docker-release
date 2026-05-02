@@ -2,9 +2,13 @@ package config
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 )
+
+var validUpstreamName = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 
 type Strategy string
 
@@ -33,18 +37,18 @@ type ServiceConfig struct {
 	HealthCheckTimeout time.Duration
 	DrainTimeout       time.Duration
 	Affinity           string
-	NginxContainer     string
+	NginxService       string
 	NginxConfigDir     string
 	NginxKeepalive     int
-	AngieContainer     string
+	AngieService       string
 	AngieConfigDir     string
 	AngieKeepalive     int
 	TraefikConfigDir   string
-	CaddyContainer     string
+	CaddyService       string
 	CaddyConfigDir     string
 	CaddyPath          string
 	CaddyKeepalive     int
-	HAProxyContainer   string
+	HAProxyService     string
 	HAProxyConfigDir   string
 	UpstreamName       string
 
@@ -75,18 +79,18 @@ func ParseLabels(labels map[string]string) (*ServiceConfig, error) {
 		HealthCheckTimeout: parseDurationOr(labels, "release.health_check_timeout", 60*time.Second),
 		DrainTimeout:       parseDurationOr(labels, "release.drain_timeout", 10*time.Second),
 		Affinity:           resolveAffinity(labels),
-		NginxContainer:     getOr(labels, "release.nginx.container", ""),
+		NginxService:       getOr(labels, "release.nginx.service", ""),
 		NginxConfigDir:     getOr(labels, "release.nginx.config_dir", ""),
 		NginxKeepalive:     parseIntOr(labels, "release.nginx.keepalive", -1),
-		AngieContainer:     getOr(labels, "release.angie.container", ""),
+		AngieService:       getOr(labels, "release.angie.service", ""),
 		AngieConfigDir:     getOr(labels, "release.angie.config_dir", ""),
 		AngieKeepalive:     parseIntOr(labels, "release.angie.keepalive", -1),
 		TraefikConfigDir:   getOr(labels, "release.traefik.config_dir", ""),
-		CaddyContainer:     getOr(labels, "release.caddy.container", ""),
+		CaddyService:       getOr(labels, "release.caddy.service", ""),
 		CaddyConfigDir:     getOr(labels, "release.caddy.config_dir", ""),
 		CaddyPath:          getOr(labels, "release.caddy.path", ""),
 		CaddyKeepalive:     parseIntOr(labels, "release.caddy.keepalive", -1),
-		HAProxyContainer:   getOr(labels, "release.haproxy.container", ""),
+		HAProxyService:     getOr(labels, "release.haproxy.service", ""),
 		HAProxyConfigDir:   getOr(labels, "release.haproxy.config_dir", ""),
 		UpstreamName:       getOr(labels, "release.upstream", ""),
 
@@ -156,7 +160,26 @@ func (c *ServiceConfig) validate() error {
 		return fmt.Errorf("caddy.keepalive must be >= 0, got %d", c.CaddyKeepalive)
 	}
 
+	for _, dir := range []string{c.NginxConfigDir, c.AngieConfigDir, c.TraefikConfigDir, c.CaddyConfigDir, c.HAProxyConfigDir} {
+		if containsDotDot(dir) {
+			return fmt.Errorf("config_dir must not contain '..' path components")
+		}
+	}
+
+	if c.UpstreamName != "" && !validUpstreamName.MatchString(c.UpstreamName) {
+		return fmt.Errorf("upstream name %q must match [a-zA-Z0-9._-]+", c.UpstreamName)
+	}
+
 	return nil
+}
+
+func containsDotDot(p string) bool {
+	for _, part := range strings.FieldsFunc(p, func(r rune) bool { return r == '/' || r == '\\' }) {
+		if part == ".." {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *ServiceConfig) ResolveNginxKeepalive(serverCount int) int {

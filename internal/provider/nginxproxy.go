@@ -83,6 +83,10 @@ func NewNginxProxyFromString(templatePath string, stockTmpl string) *NginxProxyP
 }
 
 func (p *NginxProxyProvider) GenerateConfig(state *UpstreamState) error {
+	if err := state.Validate(); err != nil {
+		return err
+	}
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
 

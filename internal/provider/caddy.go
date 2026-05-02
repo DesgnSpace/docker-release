@@ -11,22 +11,26 @@ import (
 )
 
 type CaddyProvider struct {
-	configDir     string
-	docker        *docker.Client
-	containerName string
-	path          string // optional: generate handle_path block instead of named snippet
+	configDir   string
+	docker      *docker.Client
+	serviceName string
+	path        string // optional: generate handle_path block instead of named snippet
 }
 
-func NewCaddy(configDir string, dockerClient *docker.Client, containerName, path string) *CaddyProvider {
+func NewCaddy(configDir string, dockerClient *docker.Client, serviceName, path string) *CaddyProvider {
 	return &CaddyProvider{
-		configDir:     configDir,
-		docker:        dockerClient,
-		containerName: containerName,
-		path:          path,
+		configDir:   configDir,
+		docker:      dockerClient,
+		serviceName: serviceName,
+		path:        path,
 	}
 }
 
 func (p *CaddyProvider) GenerateConfig(state *UpstreamState) error {
+	if err := state.Validate(); err != nil {
+		return err
+	}
+
 	conf := renderCaddyUpstream(state, p.path)
 
 	if err := os.MkdirAll(p.configDir, 0o755); err != nil {
@@ -48,18 +52,22 @@ func (p *CaddyProvider) GenerateConfig(state *UpstreamState) error {
 }
 
 func (p *CaddyProvider) Reload() error {
-	if p.containerName == "" {
+	if p.serviceName == "" {
 		return nil
 	}
 
 	ctx := context.Background()
 
-	containerID, err := p.docker.FindContainerByService(ctx, p.containerName)
+	ctr, err := p.docker.FindContainerByService(ctx, p.serviceName)
 	if err != nil {
-		return fmt.Errorf("resolving caddy container %q: %w", p.containerName, err)
+		return fmt.Errorf("resolving caddy container %q: %w", p.serviceName, err)
 	}
 
-	return p.docker.Exec(ctx, containerID, []string{"caddy", "reload", "--config", "/etc/caddy/Caddyfile"})
+	if !matchesImage(ctr.Image, "caddy", "alpine") {
+		return fmt.Errorf("container %q has unexpected image %q (want caddy or alpine-based)", p.serviceName, ctr.Image)
+	}
+
+	return p.docker.Exec(ctx, ctr.ID, []string{"caddy", "reload", "--config", "/etc/caddy/Caddyfile"})
 }
 
 func renderCaddyUpstream(state *UpstreamState, path string) string {

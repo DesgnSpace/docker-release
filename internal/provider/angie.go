@@ -12,22 +12,26 @@ import (
 
 // AngieProvider is a provider for the Angie web server (a drop-in nginx replacement)
 type AngieProvider struct {
-	configDir     string
-	docker        *docker.Client
-	containerName string // angie container name for reload
+	configDir   string
+	docker      *docker.Client
+	serviceName string
 }
 
 // NewAngie creates a new Angie provider
-func NewAngie(configDir string, dockerClient *docker.Client, containerName string) *AngieProvider {
+func NewAngie(configDir string, dockerClient *docker.Client, serviceName string) *AngieProvider {
 	return &AngieProvider{
-		configDir:     configDir,
-		docker:        dockerClient,
-		containerName: containerName,
+		configDir:   configDir,
+		docker:      dockerClient,
+		serviceName: serviceName,
 	}
 }
 
 // GenerateConfig creates an Angie upstream configuration file
 func (p *AngieProvider) GenerateConfig(state *UpstreamState) error {
+	if err := state.Validate(); err != nil {
+		return err
+	}
+
 	conf := renderAngieUpstream(state)
 
 	if err := os.MkdirAll(p.configDir, 0o755); err != nil {
@@ -50,18 +54,22 @@ func (p *AngieProvider) GenerateConfig(state *UpstreamState) error {
 
 // Reload signals Angie to reload its configuration
 func (p *AngieProvider) Reload() error {
-	if p.containerName == "" {
+	if p.serviceName == "" {
 		return nil
 	}
 
 	ctx := context.Background()
 
-	containerID, err := p.docker.FindContainerByService(ctx, p.containerName)
+	ctr, err := p.docker.FindContainerByService(ctx, p.serviceName)
 	if err != nil {
-		return fmt.Errorf("resolving angie container %q: %w", p.containerName, err)
+		return fmt.Errorf("resolving angie container %q: %w", p.serviceName, err)
 	}
 
-	return p.docker.Exec(ctx, containerID, []string{"angie", "-s", "reload"})
+	if !matchesImage(ctr.Image, "angie", "nginx", "alpine") {
+		return fmt.Errorf("container %q has unexpected image %q (want angie, nginx, or alpine-based)", p.serviceName, ctr.Image)
+	}
+
+	return p.docker.Exec(ctx, ctr.ID, []string{"angie", "-s", "reload"})
 }
 
 // renderAngieUpstream generates the upstream block for Angie

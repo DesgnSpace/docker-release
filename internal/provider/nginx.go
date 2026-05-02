@@ -11,20 +11,24 @@ import (
 )
 
 type NginxProvider struct {
-	configDir     string
-	docker        *docker.Client
-	containerName string // nginx container name for reload
+	configDir   string
+	docker      *docker.Client
+	serviceName string
 }
 
-func NewNginx(configDir string, dockerClient *docker.Client, containerName string) *NginxProvider {
+func NewNginx(configDir string, dockerClient *docker.Client, serviceName string) *NginxProvider {
 	return &NginxProvider{
-		configDir:     configDir,
-		docker:        dockerClient,
-		containerName: containerName,
+		configDir:   configDir,
+		docker:      dockerClient,
+		serviceName: serviceName,
 	}
 }
 
 func (p *NginxProvider) GenerateConfig(state *UpstreamState) error {
+	if err := state.Validate(); err != nil {
+		return err
+	}
+
 	conf := renderUpstream(state)
 
 	if err := os.MkdirAll(p.configDir, 0o755); err != nil {
@@ -46,18 +50,22 @@ func (p *NginxProvider) GenerateConfig(state *UpstreamState) error {
 }
 
 func (p *NginxProvider) Reload() error {
-	if p.containerName == "" {
+	if p.serviceName == "" {
 		return nil
 	}
 
 	ctx := context.Background()
 
-	containerID, err := p.docker.FindContainerByService(ctx, p.containerName)
+	ctr, err := p.docker.FindContainerByService(ctx, p.serviceName)
 	if err != nil {
-		return fmt.Errorf("resolving nginx container %q: %w", p.containerName, err)
+		return fmt.Errorf("resolving nginx container %q: %w", p.serviceName, err)
 	}
 
-	return p.docker.Exec(ctx, containerID, []string{"nginx", "-s", "reload"})
+	if !matchesImage(ctr.Image, "nginx", "alpine") {
+		return fmt.Errorf("container %q has unexpected image %q (want nginx or alpine-based)", p.serviceName, ctr.Image)
+	}
+
+	return p.docker.Exec(ctx, ctr.ID, []string{"nginx", "-s", "reload"})
 }
 
 func renderUpstream(state *UpstreamState) string {
