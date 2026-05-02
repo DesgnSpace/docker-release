@@ -56,40 +56,30 @@ func (bg *BlueGreen) Execute(ctx context.Context, d *Deployment) error {
 		}
 	}
 
-	log.Printf("[blue-green] all green containers healthy, adding to upstream alongside blue")
+	log.Printf("[blue-green] all green containers healthy, cutting over traffic")
 
-	upstream := &provider.UpstreamState{Service: d.Service, UpstreamName: d.UpstreamName(), Affinity: "ip"}
-	for _, c := range d.Old {
-		upstream.Servers = append(upstream.Servers, provider.Server{Addr: c.Addr})
-	}
-	for _, c := range d.New {
-		upstream.Servers = append(upstream.Servers, provider.Server{Addr: c.Addr})
-	}
-	applyNginxKeepalive(d, upstream)
-
-	if err := bg.provider.GenerateConfig(upstream); err != nil {
-		return fmt.Errorf("generating mixed config: %w", err)
+	cutoverUpstream := buildBlueGreenCutoverUpstream(d)
+	if err := bg.provider.GenerateConfig(cutoverUpstream); err != nil {
+		return fmt.Errorf("generating cutover config: %w", err)
 	}
 
 	if err := bg.provider.Reload(); err != nil {
 		return fmt.Errorf("reloading provider: %w", err)
 	}
 
-	ds.CurrentWeight = 50
+	ds.CurrentWeight = 100
 	if err := bg.state.Save(ds); err != nil {
-		return fmt.Errorf("saving soak state: %w", err)
+		return fmt.Errorf("saving cutover state: %w", err)
 	}
 
 	soakTime := d.Config.BlueGreen.SoakTime
-	log.Printf("[blue-green] soaking for %s with both blue and green serving traffic", soakTime)
+	log.Printf("[blue-green] soaking on green for %s before removing blue", soakTime)
 
 	select {
 	case <-time.After(soakTime):
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-
-	log.Printf("[blue-green] soak complete, switching traffic to green")
 
 	finalUpstream := &provider.UpstreamState{Service: d.Service, UpstreamName: d.UpstreamName()}
 	for _, c := range d.New {
@@ -103,11 +93,6 @@ func (bg *BlueGreen) Execute(ctx context.Context, d *Deployment) error {
 
 	if err := bg.provider.Reload(); err != nil {
 		return fmt.Errorf("reloading provider: %w", err)
-	}
-
-	ds.CurrentWeight = 100
-	if err := bg.state.Save(ds); err != nil {
-		return fmt.Errorf("saving cutover state: %w", err)
 	}
 
 	log.Printf("[blue-green] draining blue containers for %s", d.Config.DrainTimeout)
@@ -139,6 +124,21 @@ func (bg *BlueGreen) Execute(ctx context.Context, d *Deployment) error {
 
 	log.Printf("[blue-green] deployment complete for %s", d.Service)
 	return nil
+}
+
+func buildBlueGreenCutoverUpstream(d *Deployment) *provider.UpstreamState {
+	upstream := &provider.UpstreamState{
+		Service:      d.Service,
+		UpstreamName: d.UpstreamName(),
+	}
+
+	for _, c := range d.New {
+		upstream.Servers = append(upstream.Servers, provider.Server{Addr: c.Addr})
+	}
+
+	applyNginxKeepalive(d, upstream)
+
+	return upstream
 }
 
 func (bg *BlueGreen) Rollback(ctx context.Context, d *Deployment) error {

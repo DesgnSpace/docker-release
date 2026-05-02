@@ -14,14 +14,17 @@ services:
       - "8082:80"
       - "8083:8080"
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik-dynamic:/etc/traefik/dynamic:ro
     command:
       - "--api.insecure=true"
       - "--entrypoints.web.address=:80"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
       - "--providers.file.directory=/etc/traefik/dynamic"
       - "--providers.file.watch=true"
 
-  app:
+  linear_app:
     build:
       context: ..
       dockerfile: app.Dockerfile
@@ -43,6 +46,11 @@ services:
       - "release.healthcheck.timeout=3s"
       - "release.healthcheck.retries=3"
       - "release.healthcheck.start_period=10s"
+      - "traefik.enable=true"
+      - "traefik.http.routers.linear-app.rule=PathPrefix(`/linear`)"
+      - "traefik.http.routers.linear-app.service=linear_app@file"
+      - "traefik.http.routers.linear-app.middlewares=strip-linear"
+      - "traefik.http.middlewares.strip-linear.stripprefix.prefixes=/linear"
 
   canary_app:
     build:
@@ -70,6 +78,11 @@ services:
       - "release.healthcheck.timeout=3s"
       - "release.healthcheck.retries=3"
       - "release.healthcheck.start_period=10s"
+      - "traefik.enable=true"
+      - "traefik.http.routers.canary-app.rule=PathPrefix(`/canary`)"
+      - "traefik.http.routers.canary-app.service=canary_app@file"
+      - "traefik.http.routers.canary-app.middlewares=strip-canary"
+      - "traefik.http.middlewares.strip-canary.stripprefix.prefixes=/canary"
 
   blue_green_app:
     build:
@@ -94,6 +107,11 @@ services:
       - "release.healthcheck.timeout=3s"
       - "release.healthcheck.retries=3"
       - "release.healthcheck.start_period=10s"
+      - "traefik.enable=true"
+      - "traefik.http.routers.blue-green-app.rule=PathPrefix(`/bluegreen`)"
+      - "traefik.http.routers.blue-green-app.service=blue_green_app@file"
+      - "traefik.http.routers.blue-green-app.middlewares=strip-blue-green"
+      - "traefik.http.middlewares.strip-blue-green.stripprefix.prefixes=/bluegreen"
 
 volumes:
   traefik-dynamic:

@@ -38,8 +38,9 @@ func TestBlueGreenExecute(t *testing.T) {
 	stateMgr := state.NewManager(t.TempDir(), "")
 
 	bg := NewBlueGreen(docker, prov, stateMgr)
+	d := bgDeployment()
 
-	if err := bg.Execute(context.Background(), bgDeployment()); err != nil {
+	if err := bg.Execute(context.Background(), d); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
 
@@ -48,15 +49,17 @@ func TestBlueGreenExecute(t *testing.T) {
 	}
 
 	if len(prov.configs) != 2 {
-		t.Fatalf("expected 2 config generations (mixed + green), got %d", len(prov.configs))
+		t.Fatalf("expected 2 config generations (cutover + final), got %d", len(prov.configs))
 	}
 
-	mixed := prov.configs[0]
-	if len(mixed.Servers) != 4 {
-		t.Errorf("expected 4 servers in mixed config (blue+green), got %d", len(mixed.Servers))
+	cutover := prov.configs[0]
+	if len(cutover.Servers) != 2 {
+		t.Errorf("expected 2 servers in cutover config (green only), got %d", len(cutover.Servers))
 	}
-	if mixed.Affinity != "ip" {
-		t.Errorf("mixed config should use ip affinity during soak, got %q", mixed.Affinity)
+	for _, s := range cutover.Servers {
+		if !strings.Contains(s.Addr, "172.18.0.1") {
+			t.Errorf("cutover config should only have green servers, got %s", s.Addr)
+		}
 	}
 
 	final := prov.configs[1]

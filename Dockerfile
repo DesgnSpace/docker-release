@@ -10,7 +10,8 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${VERSION}" -o /bin/d
 FROM alpine:3.21
 RUN apk add --no-cache ca-certificates
 COPY --from=builder /bin/dr /usr/local/bin/dr
-COPY builds/ /builds/
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 LABEL org.opencontainers.image.title="docker-release"
-ENTRYPOINT ["dr"]
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["watch"]

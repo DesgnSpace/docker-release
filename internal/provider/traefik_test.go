@@ -99,6 +99,42 @@ func TestRenderTraefikWeighted(t *testing.T) {
 	}
 }
 
+func TestRenderTraefikWeightedBlueGreenCutover(t *testing.T) {
+	state := &UpstreamState{
+		Service:  "blue_green_app",
+		Affinity: "ip",
+		Servers: []Server{
+			{Addr: "172.18.0.5:80", Weight: 0},
+			{Addr: "172.18.0.6:80", Weight: 0},
+			{Addr: "172.18.0.8:80", Weight: 100},
+			{Addr: "172.18.0.9:80", Weight: 100},
+		},
+	}
+
+	got := renderTraefikYAML(state)
+
+	expects := []string{
+		"weighted:",
+		"blue_green_app-stable:",
+		"blue_green_app-canary:",
+		"weight: 100",
+		`url: "http://172.18.0.5:80"`,
+		`url: "http://172.18.0.6:80"`,
+		`url: "http://172.18.0.8:80"`,
+		`url: "http://172.18.0.9:80"`,
+	}
+
+	for _, want := range expects {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in:\n%s", want, got)
+		}
+	}
+
+	if strings.Contains(got, "weight: 0") {
+		t.Errorf("zero-weight service should be omitted from weighted route:\n%s", got)
+	}
+}
+
 func TestRenderTraefikSkipsDownServers(t *testing.T) {
 	state := &UpstreamState{
 		Service: "app",

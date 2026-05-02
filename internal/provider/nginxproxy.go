@@ -1,11 +1,45 @@
 package provider
 
 import (
+	"crypto/sha1"
+	"embed"
 	"fmt"
 	"os"
 	"strings"
 	"sync"
 )
+
+//go:embed stock/nginx.tmpl
+var stockNginxTmpl embed.FS
+
+// NginxProxyUpstreamName computes the upstream name nginx-proxy assigns using
+// the same algorithm as the nginx-proxy template:
+//   - root path (/):  {VIRTUAL_HOST}
+//   - other paths:    {VIRTUAL_HOST}-{sha1(VIRTUAL_PATH)}
+func NginxProxyUpstreamName(env []string) (string, error) {
+	host := envValue(env, "VIRTUAL_HOST")
+	if host == "" {
+		return "", fmt.Errorf("VIRTUAL_HOST not set")
+	}
+
+	path := envValue(env, "VIRTUAL_PATH")
+	if path == "" || path == "/" {
+		return host, nil
+	}
+
+	sum := sha1.Sum([]byte(path))
+	return fmt.Sprintf("%s-%x", host, sum), nil
+}
+
+func envValue(env []string, key string) string {
+	prefix := key + "="
+	for _, e := range env {
+		if strings.HasPrefix(e, prefix) {
+			return strings.TrimPrefix(e, prefix)
+		}
+	}
+	return ""
+}
 
 const (
 	upstreamMarkerStart = "{{- /* docker-release:managed-start */ -}}"
@@ -24,9 +58,13 @@ type NginxProxyProvider struct {
 }
 
 func NewNginxProxy(templatePath string) (*NginxProxyProvider, error) {
-	stock, err := os.ReadFile(templatePath)
+	stock, err := stockNginxTmpl.ReadFile("stock/nginx.tmpl")
 	if err != nil {
 		return nil, fmt.Errorf("reading stock template: %w", err)
+	}
+
+	if err := os.WriteFile(templatePath, stock, 0o644); err != nil {
+		return nil, fmt.Errorf("seeding nginx template: %w", err)
 	}
 
 	return &NginxProxyProvider{
@@ -143,6 +181,7 @@ func buildManagedUpstream(services map[string]*UpstreamState, originalBlock stri
 	var b strings.Builder
 
 	b.WriteString(originalUpstreamStart + "\n")
+	b.WriteString("    {{- $vpath := .VPath }}\n")
 	b.WriteString("    " + upstreamMarkerStart + "\n")
 
 	first := true

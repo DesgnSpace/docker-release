@@ -11,12 +11,14 @@ services:
   nginx-proxy:
     image: nginxproxy/nginx-proxy:alpine
     ports:
-      - "8080:80"
+      - "8080:8080"
     volumes:
       - /var/run/docker.sock:/tmp/docker.sock:ro
       - nginx-tmpl:/app/custom:ro
     environment:
       - NGINX_TMPL=/app/custom/nginx.tmpl
+      - DEFAULT_HOST=localhost
+      - HTTP_PORT=8080
     depends_on:
       docker-release:
         condition: service_started
@@ -29,6 +31,9 @@ services:
         BUILD_ID: "linear"
     deploy:
       replicas: 2
+    depends_on:
+      docker-release:
+        condition: service_started
     labels:
       - "release.enable=true"
       - "release.provider=nginx-proxy"
@@ -36,14 +41,15 @@ services:
       - "release.health_check_timeout=20s"
       - "release.drain_timeout=5s"
       - "release.nginx.config_dir=/shared/nginx-tmpl"
-      - "release.upstream=linear.local"
+      - "release.healthcheck.path=/"
+      - "release.healthcheck.interval=5s"
+      - "release.healthcheck.timeout=3s"
+      - "release.healthcheck.retries=3"
+      - "release.healthcheck.start_period=10s"
     environment:
-      - VIRTUAL_HOST=linear.local
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:80"]
-      interval: 5s
-      timeout: 3s
-      retries: 3
+      - VIRTUAL_HOST=localhost
+      - VIRTUAL_PATH=/linear/
+      - VIRTUAL_DEST=/
 
   canary_app:
     build:
@@ -53,6 +59,9 @@ services:
         BUILD_ID: "canary"
     deploy:
       replicas: 2
+    depends_on:
+      docker-release:
+        condition: service_started
     labels:
       - "release.enable=true"
       - "release.provider=nginx-proxy"
@@ -63,14 +72,15 @@ services:
       - "release.canary.affinity=cookie"
       - "release.health_check_timeout=20s"
       - "release.nginx.config_dir=/shared/nginx-tmpl"
-      - "release.upstream=canary.local"
+      - "release.healthcheck.path=/"
+      - "release.healthcheck.interval=5s"
+      - "release.healthcheck.timeout=3s"
+      - "release.healthcheck.retries=3"
+      - "release.healthcheck.start_period=10s"
     environment:
-      - VIRTUAL_HOST=canary.local
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:80"]
-      interval: 5s
-      timeout: 3s
-      retries: 3
+      - VIRTUAL_HOST=localhost
+      - VIRTUAL_PATH=/canary/
+      - VIRTUAL_DEST=/
 
   blue_green_app:
     build:
@@ -80,6 +90,9 @@ services:
         BUILD_ID: "blue_green"
     deploy:
       replicas: 2
+    depends_on:
+      docker-release:
+        condition: service_started
     labels:
       - "release.enable=true"
       - "release.provider=nginx-proxy"
@@ -87,14 +100,15 @@ services:
       - "release.bg.soak_time=30s"
       - "release.health_check_timeout=20s"
       - "release.nginx.config_dir=/shared/nginx-tmpl"
-      - "release.upstream=bluegreen.local"
+      - "release.healthcheck.path=/"
+      - "release.healthcheck.interval=5s"
+      - "release.healthcheck.timeout=3s"
+      - "release.healthcheck.retries=3"
+      - "release.healthcheck.start_period=10s"
     environment:
-      - VIRTUAL_HOST=bluegreen.local
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:80"]
-      interval: 5s
-      timeout: 3s
-      retries: 3
+      - VIRTUAL_HOST=localhost
+      - VIRTUAL_PATH=/bluegreen/
+      - VIRTUAL_DEST=/
 
 volumes:
   nginx-tmpl:

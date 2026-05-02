@@ -306,3 +306,11 @@ func (c *Client) WaitHealthy(ctx context.Context, containerID string, timeout ti
 func (c *Client) Close() error {
 	return c.api.Close()
 }
+
+func (c *Client) ContainerEnv(ctx context.Context, containerID string) ([]string, error) {
+	info, err := c.api.ContainerInspect(ctx, containerID)
+	if err != nil {
+		return nil, fmt.Errorf("inspecting container: %w", err)
+	}
+	return info.Config.Env, nil
+}

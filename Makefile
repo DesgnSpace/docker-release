@@ -1,9 +1,9 @@
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+VERSION ?= $(shell v=$$(git tag --points-at HEAD 2>/dev/null | head -1); echo $${v:-dev})
 IMAGE   ?= malico/docker-release
 
-.PHONY: dev test build publish up-nginx up-angie up-traefik up-nginx-proxy down-nginx down-angie down-traefik down-nginx-proxy
+.PHONY: dev test build publish buildx-builder up-nginx up-angie up-traefik up-nginx-proxy down-nginx down-angie down-traefik down-nginx-proxy
 
-build:
+build: buildx-builder
 	docker buildx build \
 		--platform linux/amd64,linux/arm64 \
 		--build-arg VERSION=$(VERSION) \
@@ -11,7 +11,7 @@ build:
 		-t $(IMAGE):latest \
 		.
 
-publish:
+publish: buildx-builder
 	docker buildx build \
 		--platform linux/amd64,linux/arm64 \
 		--build-arg VERSION=$(VERSION) \
@@ -19,6 +19,10 @@ publish:
 		-t $(IMAGE):latest \
 		--push \
 		.
+
+buildx-builder:
+	@docker buildx inspect docker-release-builder >/dev/null 2>&1 || \
+		docker buildx create --name docker-release-builder --driver docker-container --use
 
 # Install the Docker CLI plugin (docker release <cmd>)
 dev:

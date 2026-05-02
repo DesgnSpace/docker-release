@@ -171,6 +171,8 @@ func (c *Controller) handleStart(ctx context.Context, containerID string, attrs 
 		return
 	}
 
+	c.resolveNginxProxyUpstream(ctx, cfg, serviceContainers)
+
 	go c.deploy(ctx, serviceName, cfg, old, new)
 }
 
@@ -277,6 +279,23 @@ func (c *Controller) deploy(parentCtx context.Context, serviceName string, cfg *
 	}
 
 	log.Printf("deployment complete for %s", serviceName)
+}
+
+func (c *Controller) resolveNginxProxyUpstream(ctx context.Context, cfg *config.ServiceConfig, containers []types.Container) {
+	if cfg.Provider != config.ProviderNginxProxy || cfg.UpstreamName != "" || len(containers) == 0 {
+		return
+	}
+	env, err := c.docker.ContainerEnv(ctx, containers[0].ID)
+	if err != nil {
+		log.Printf("warning: could not read container env for nginx-proxy upstream: %v", err)
+		return
+	}
+	name, err := provider.NginxProxyUpstreamName(env)
+	if err != nil {
+		log.Printf("warning: could not resolve nginx-proxy upstream name: %v", err)
+		return
+	}
+	cfg.UpstreamName = name
 }
 
 func (c *Controller) createProvider(cfg *config.ServiceConfig) provider.Provider {
@@ -404,6 +423,8 @@ func (c *Controller) Release(ctx context.Context, service string, force bool) er
 	if err != nil {
 		return fmt.Errorf("parsing labels: %w", err)
 	}
+
+	c.resolveNginxProxyUpstream(ctx, cfg, serviceContainers)
 
 	images := groupByImageID(serviceContainers)
 
@@ -722,6 +743,7 @@ func (c *Controller) generateInitialConfigs(ctx context.Context, services map[st
 			continue
 		}
 
+		c.resolveNginxProxyUpstream(ctx, cfg, containers)
 		activeConfigs[name] = cfg
 	}
 
@@ -883,6 +905,7 @@ func (c *Controller) refreshServiceConfig(ctx context.Context, serviceName strin
 		return
 	}
 
+	c.resolveNginxProxyUpstream(ctx, cfg, serviceContainers)
 	c.generateServiceConfig(ctx, serviceName, cfg, serviceContainers, true)
 }
 
@@ -936,6 +959,7 @@ func (c *Controller) refreshAllConfigs(ctx context.Context) {
 		if c.shouldSkipRefresh(name, imageCount) {
 			continue
 		}
+		c.resolveNginxProxyUpstream(ctx, cfg, services[name])
 		c.generateServiceConfig(ctx, name, cfg, services[name], true)
 	}
 }
