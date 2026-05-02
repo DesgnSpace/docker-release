@@ -12,14 +12,12 @@ services:
     image: malico/docker-release:0.1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - docker-release-state:/var/lib/docker-release
 
   worker:
     image: your-registry/worker:latest
     labels:
       release.enable: "true"
       release.provider: none
-      release.strategy: linear
       release.health_check_timeout: 60s
       release.drain_timeout: 5s
     healthcheck:
@@ -28,8 +26,6 @@ services:
       timeout: 5s
       retries: 3
 
-volumes:
-  docker-release-state:
 ```
 
 ## Required Labels
@@ -37,7 +33,6 @@ volumes:
 ```yaml
 release.enable: "true"
 release.provider: none
-release.strategy: linear
 ```
 
 ## Deploy
@@ -57,7 +52,6 @@ docker release worker
 ```yaml
 release.enable: "true"
 release.provider: none
-release.strategy: linear
 release.health_check_timeout: 60s
 release.drain_timeout: 5s
 ```
@@ -81,7 +75,6 @@ services:
     labels:
       release.enable: "true"
       release.provider: none
-      release.strategy: linear
 ```
 
 ## Common Problems

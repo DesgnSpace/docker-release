@@ -30,25 +30,22 @@ services:
     image: malico/docker-release:0.1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - docker-release-state:/var/lib/docker-release
-      - nginx-config:/shared/nginx-config:rw
+      - nginx-config:/shared/nginx-config:rw # docker-release writes Nginx upstream files here
 
   nginx:
     image: nginx:alpine
     ports:
       - "80:80"
     volumes:
-      - nginx-config:/etc/nginx/conf.d/custom:ro
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - nginx-config:/etc/nginx/conf.d/custom:ro # Nginx reads generated upstream files here
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro # Your base Nginx routes
 
   app:
     image: your-registry/app:latest
     labels:
       release.enable: "true"
       release.provider: nginx
-      release.strategy: linear
       release.nginx.service: nginx
-      release.nginx.config_dir: /shared/nginx-config
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost/health"]
       interval: 10s
@@ -56,7 +53,6 @@ services:
       retries: 3
 
 volumes:
-  docker-release-state:
   nginx-config:
 ```
 

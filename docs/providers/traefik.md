@@ -12,7 +12,6 @@ services:
     image: malico/docker-release:0.1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - docker-release-state:/var/lib/docker-release
       - traefik-config:/shared/traefik-config:rw
 
   traefik:
@@ -35,7 +34,6 @@ services:
     labels:
       release.enable: "true"
       release.provider: traefik
-      release.strategy: linear
       release.traefik.config_dir: /shared/traefik-config
       traefik.enable: "true"
       traefik.http.routers.app.rule: "PathPrefix(`/app`)"
@@ -49,7 +47,6 @@ services:
       retries: 3
 
 volumes:
-  docker-release-state:
   traefik-config:
 ```
 
@@ -80,7 +77,7 @@ docker release app
 ### Linear
 
 ```yaml
-release.strategy: linear
+# No label needed. Linear is the default.
 release.drain_timeout: 10s
 release.health_check_timeout: 60s
 ```

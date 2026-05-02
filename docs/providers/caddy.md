@@ -12,7 +12,6 @@ services:
     image: malico/docker-release:0.1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - docker-release-state:/var/lib/docker-release
       - caddy-config:/shared/caddy-config:rw
 
   caddy:
@@ -28,7 +27,6 @@ services:
     labels:
       release.enable: "true"
       release.provider: caddy
-      release.strategy: linear
       release.caddy.service: caddy
       release.caddy.config_dir: /shared/caddy-config
       release.caddy.path: /app
@@ -39,7 +37,6 @@ services:
       retries: 3
 
 volumes:
-  docker-release-state:
   caddy-config:
 ```
 
@@ -80,7 +77,7 @@ docker release app
 ### Linear
 
 ```yaml
-release.strategy: linear
+# No label needed. Linear is the default.
 release.drain_timeout: 10s
 release.health_check_timeout: 60s
 ```

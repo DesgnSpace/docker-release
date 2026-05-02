@@ -12,7 +12,6 @@ services:
     image: malico/docker-release:0.1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - docker-release-state:/var/lib/docker-release
       - haproxy-config:/shared/haproxy-config:rw
 
   haproxy:
@@ -29,7 +28,6 @@ services:
     labels:
       release.enable: "true"
       release.provider: haproxy
-      release.strategy: linear
       release.haproxy.service: haproxy
       release.haproxy.config_dir: /shared/haproxy-config
     healthcheck:
@@ -39,7 +37,6 @@ services:
       retries: 3
 
 volumes:
-  docker-release-state:
   haproxy-config:
 ```
 
@@ -90,7 +87,7 @@ docker release app
 ### Linear
 
 ```yaml
-release.strategy: linear
+# No label needed. Linear is the default.
 release.drain_timeout: 10s
 release.health_check_timeout: 60s
 ```

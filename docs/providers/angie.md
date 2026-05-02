@@ -12,7 +12,6 @@ services:
     image: malico/docker-release:0.1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - docker-release-state:/var/lib/docker-release
       - angie-config:/shared/angie-config:rw
 
   angie:
@@ -28,7 +27,6 @@ services:
     labels:
       release.enable: "true"
       release.provider: angie
-      release.strategy: linear
       release.angie.service: angie
       release.angie.config_dir: /shared/angie-config
     healthcheck:
@@ -38,7 +36,6 @@ services:
       retries: 3
 
 volumes:
-  docker-release-state:
   angie-config:
 ```
 
@@ -87,7 +84,7 @@ docker release app
 ### Linear
 
 ```yaml
-release.strategy: linear
+# No label needed. Linear is the default.
 release.drain_timeout: 10s
 release.health_check_timeout: 60s
 ```

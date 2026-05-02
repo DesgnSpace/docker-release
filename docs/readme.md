@@ -55,7 +55,7 @@ docker release release status
 Replaces containers one by one.
 
 ```yaml
-release.strategy: linear
+# No label needed. Linear is the default.
 ```
 
 ### Blue/Green
@@ -112,9 +112,11 @@ release.affinity: ip
 
 Add a Docker `healthcheck` to each app service. `docker-release` waits for `healthy` before it sends traffic to a new container.
 
-## State
+## Optional Rollback State
 
-Mount `/var/lib/docker-release` to a volume. This keeps state for rollback.
+Basic examples do not need this volume.
+
+Add it if you want rollback state to survive when the `docker-release` container restarts.
 
 ```yaml
 services:
