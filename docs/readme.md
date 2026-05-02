@@ -117,6 +117,11 @@ Add a Docker `healthcheck` to each app service. `docker-release` waits for `heal
 Mount `/var/lib/docker-release` to a volume. This keeps state for rollback.
 
 ```yaml
+services:
+  docker-release:
+    volumes:
+      - docker-release-state:/var/lib/docker-release
+
 volumes:
-  - docker-release-state:/var/lib/docker-release
+  docker-release-state:
 ```
