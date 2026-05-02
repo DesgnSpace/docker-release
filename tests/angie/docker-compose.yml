@@ -38,11 +38,6 @@ services:
       - "release.drain_timeout=5s"
       - "release.angie.container=angie"
       - "release.angie.config_dir=/shared/angie-config"
-      - "release.healthcheck.path=/"
-      - "release.healthcheck.interval=5s"
-      - "release.healthcheck.timeout=3s"
-      - "release.healthcheck.retries=3"
-      - "release.healthcheck.start_period=10s"
 
   canary_app:
     build:
@@ -66,11 +61,6 @@ services:
       - "release.health_check_timeout=20s"
       - "release.angie.container=angie"
       - "release.angie.config_dir=/shared/angie-config"
-      - "release.healthcheck.path=/"
-      - "release.healthcheck.interval=5s"
-      - "release.healthcheck.timeout=3s"
-      - "release.healthcheck.retries=3"
-      - "release.healthcheck.start_period=10s"
 
   blue_green_app:
     build:
@@ -88,14 +78,11 @@ services:
       - "release.provider=angie"
       - "release.strategy=blue-green"
       - "release.bg.soak_time=30s"
+      - "release.bg.green_weight=50"
+      - "release.bg.affinity=ip"
       - "release.health_check_timeout=20s"
       - "release.angie.container=angie"
       - "release.angie.config_dir=/shared/angie-config"
-      - "release.healthcheck.path=/"
-      - "release.healthcheck.interval=5s"
-      - "release.healthcheck.timeout=3s"
-      - "release.healthcheck.retries=3"
-      - "release.healthcheck.start_period=10s"
 
 volumes:
   angie-config:

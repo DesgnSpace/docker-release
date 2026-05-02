@@ -41,11 +41,6 @@ services:
       - "release.health_check_timeout=20s"
       - "release.drain_timeout=5s"
       - "release.nginx.config_dir=/shared/nginx-tmpl"
-      - "release.healthcheck.path=/"
-      - "release.healthcheck.interval=5s"
-      - "release.healthcheck.timeout=3s"
-      - "release.healthcheck.retries=3"
-      - "release.healthcheck.start_period=10s"
     environment:
       - VIRTUAL_HOST=localhost
       - VIRTUAL_PATH=/linear/
@@ -72,11 +67,6 @@ services:
       - "release.canary.affinity=cookie"
       - "release.health_check_timeout=20s"
       - "release.nginx.config_dir=/shared/nginx-tmpl"
-      - "release.healthcheck.path=/"
-      - "release.healthcheck.interval=5s"
-      - "release.healthcheck.timeout=3s"
-      - "release.healthcheck.retries=3"
-      - "release.healthcheck.start_period=10s"
     environment:
       - VIRTUAL_HOST=localhost
       - VIRTUAL_PATH=/canary/
@@ -98,13 +88,10 @@ services:
       - "release.provider=nginx-proxy"
       - "release.strategy=blue-green"
       - "release.bg.soak_time=30s"
+      - "release.bg.green_weight=50"
+      - "release.bg.affinity=ip"
       - "release.health_check_timeout=20s"
       - "release.nginx.config_dir=/shared/nginx-tmpl"
-      - "release.healthcheck.path=/"
-      - "release.healthcheck.interval=5s"
-      - "release.healthcheck.timeout=3s"
-      - "release.healthcheck.retries=3"
-      - "release.healthcheck.start_period=10s"
     environment:
       - VIRTUAL_HOST=localhost
       - VIRTUAL_PATH=/bluegreen/

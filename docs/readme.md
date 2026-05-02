@@ -38,7 +38,11 @@ services:
       release.strategy: linear
       release.nginx.container: nginx
       release.nginx.config_dir: /shared/proxy-config
-      release.healthcheck.path: /health
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 ```
 
 Install the CLI plugin once, then deploy:
@@ -105,6 +109,8 @@ Spins up a full replacement set, waits for all to be healthy, then cuts over all
 ```yaml
 release.strategy: blue-green
 release.bg.soak_time: 5m
+release.bg.green_weight: 50
+release.bg.affinity: ip
 ```
 
 ### Canary
@@ -155,13 +161,7 @@ All providers follow the same pattern: mount a shared config volume to both `doc
 
 ### Health checks
 
-| Label | Default | Description |
-|---|---|---|
-| `release.healthcheck.path` | — | HTTP path polled to verify health |
-| `release.healthcheck.interval` | `5s` | Poll interval |
-| `release.healthcheck.timeout` | `5s` | Request timeout |
-| `release.healthcheck.retries` | `3` | Failures before marking unhealthy |
-| `release.healthcheck.start_period` | `0` | Grace period before checks start |
+Use Docker-native `healthcheck:` on app services. `docker-release` waits for Docker's `healthy` status and listens for Docker health events from the socket.
 
 ### Nginx / Angie
 
@@ -177,6 +177,8 @@ All providers follow the same pattern: mount a shared config volume to both `doc
 | Label | Default | Description |
 |---|---|---|
 | `release.bg.soak_time` | `5m` | How long to hold old containers before removal |
+| `release.bg.green_weight` | `50` | Traffic percentage to green during soak |
+| `release.bg.affinity` | `ip` | Session affinity during soak: `ip` or `cookie` |
 
 ### Canary
 
@@ -220,9 +222,6 @@ services:
       release.strategy: linear
       release.nginx.container: nginx
       release.nginx.config_dir: /shared/proxy-config
-      release.healthcheck.path: /health
-      release.healthcheck.interval: 5s
-      release.healthcheck.retries: 3
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost/health"]
       interval: 10s

@@ -33,11 +33,11 @@ services:
       - "release.strategy=linear"
       - "release.nginx.container=nginx"
       - "release.nginx.config_dir=/shared/nginx-config"
-      - "release.healthcheck.path=/"
-      - "release.healthcheck.interval=5s"
-      - "release.healthcheck.timeout=3s"
-      - "release.healthcheck.retries=3"
-      - "release.healthcheck.start_period=10s"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
 volumes:
   nginx-config:
@@ -92,17 +92,13 @@ labels:
 # Blue/Green
 - "release.strategy=blue-green"
 - "release.bg.soak_time=30s"
+- "release.bg.green_weight=50"
+- "release.bg.affinity=ip"
 ```
 
-## HTTP health checks
+## Health checks
 
-```yaml
-- "release.healthcheck.path=/"
-- "release.healthcheck.interval=5s"
-- "release.healthcheck.timeout=3s"
-- "release.healthcheck.retries=3"
-- "release.healthcheck.start_period=10s"
-```
+Use Docker-native `healthcheck:` on app services. `docker-release` waits for Docker's `healthy` status and listens for Docker health events from the socket.
 
 ## How to run
 

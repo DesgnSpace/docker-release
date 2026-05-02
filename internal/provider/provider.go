@@ -4,6 +4,7 @@ type Server struct {
 	Addr   string // e.g. "172.18.0.5:80"
 	Weight int    // 0 means no weight directive
 	Down   bool   // marks server as draining
+	Group  string // optional traffic group for weighted providers
 }
 
 type UpstreamState struct {

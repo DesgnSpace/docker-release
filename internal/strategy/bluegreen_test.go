@@ -18,7 +18,9 @@ func bgDeployment() *Deployment {
 			HealthCheckTimeout: time.Second,
 			DrainTimeout:       time.Millisecond,
 			BlueGreen: config.BlueGreenConfig{
-				SoakTime: time.Millisecond,
+				SoakTime:    time.Millisecond,
+				GreenWeight: 60,
+				Affinity:    "ip",
 			},
 		},
 		Old: []ContainerInfo{
@@ -49,16 +51,23 @@ func TestBlueGreenExecute(t *testing.T) {
 	}
 
 	if len(prov.configs) != 2 {
-		t.Fatalf("expected 2 config generations (cutover + final), got %d", len(prov.configs))
+		t.Fatalf("expected 2 config generations (weighted soak + final), got %d", len(prov.configs))
 	}
 
-	cutover := prov.configs[0]
-	if len(cutover.Servers) != 2 {
-		t.Errorf("expected 2 servers in cutover config (green only), got %d", len(cutover.Servers))
+	soak := prov.configs[0]
+	if len(soak.Servers) != 4 {
+		t.Errorf("expected 4 servers in weighted soak config (blue+green), got %d", len(soak.Servers))
 	}
-	for _, s := range cutover.Servers {
-		if !strings.Contains(s.Addr, "172.18.0.1") {
-			t.Errorf("cutover config should only have green servers, got %s", s.Addr)
+	if soak.Affinity != "ip" {
+		t.Errorf("expected ip affinity during soak, got %q", soak.Affinity)
+	}
+	for _, s := range soak.Servers {
+		want := 40
+		if strings.Contains(s.Addr, "172.18.0.1") {
+			want = 60
+		}
+		if s.Weight != want {
+			t.Errorf("soak server %s weight = %d, want %d", s.Addr, s.Weight, want)
 		}
 	}
 

@@ -24,14 +24,6 @@ const (
 	ProviderNone       ProviderType = "none"
 )
 
-type HealthCheckConfig struct {
-	Path        string
-	Interval    time.Duration
-	Timeout     time.Duration
-	Retries     int
-	StartPeriod time.Duration
-}
-
 type ServiceConfig struct {
 	Enabled            bool
 	Provider           ProviderType
@@ -47,13 +39,14 @@ type ServiceConfig struct {
 	TraefikConfigDir   string
 	UpstreamName       string
 
-	BlueGreen   BlueGreenConfig
-	Canary      CanaryConfig
-	HealthCheck HealthCheckConfig
+	BlueGreen BlueGreenConfig
+	Canary    CanaryConfig
 }
 
 type BlueGreenConfig struct {
-	SoakTime time.Duration
+	SoakTime    time.Duration
+	GreenWeight int
+	Affinity    string
 }
 
 type CanaryConfig struct {
@@ -84,7 +77,9 @@ func ParseLabels(labels map[string]string) (*ServiceConfig, error) {
 		UpstreamName:       getOr(labels, "release.upstream", ""),
 
 		BlueGreen: BlueGreenConfig{
-			SoakTime: parseDurationOr(labels, "release.bg.soak_time", 5*time.Minute),
+			SoakTime:    parseDurationOr(labels, "release.bg.soak_time", 5*time.Minute),
+			GreenWeight: parseIntOr(labels, "release.bg.green_weight", 50),
+			Affinity:    getOr(labels, "release.bg.affinity", "ip"),
 		},
 
 		Canary: CanaryConfig{
@@ -92,14 +87,6 @@ func ParseLabels(labels map[string]string) (*ServiceConfig, error) {
 			Step:            parseIntOr(labels, "release.canary.step", 20),
 			Interval:        parseDurationOr(labels, "release.canary.interval", 2*time.Minute),
 			Affinity:        getOr(labels, "release.canary.affinity", "ip"),
-		},
-
-		HealthCheck: HealthCheckConfig{
-			Path:        getOr(labels, "release.healthcheck.path", ""),
-			Interval:    parseDurationOr(labels, "release.healthcheck.interval", 5*time.Second),
-			Timeout:     parseDurationOr(labels, "release.healthcheck.timeout", 5*time.Second),
-			Retries:     parseIntOr(labels, "release.healthcheck.retries", 3),
-			StartPeriod: parseDurationOr(labels, "release.healthcheck.start_period", 0),
 		},
 	}
 
@@ -129,6 +116,10 @@ func (c *ServiceConfig) validate() error {
 
 	if c.Canary.Step < 1 || c.Canary.Step > 100 {
 		return fmt.Errorf("canary.step must be 1-100, got %d", c.Canary.Step)
+	}
+
+	if c.BlueGreen.GreenWeight < 1 || c.BlueGreen.GreenWeight > 100 {
+		return fmt.Errorf("bg.green_weight must be 1-100, got %d", c.BlueGreen.GreenWeight)
 	}
 
 	if c.NginxKeepalive < -1 {

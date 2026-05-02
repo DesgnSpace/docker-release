@@ -67,7 +67,7 @@ func (bg *BlueGreen) Execute(ctx context.Context, d *Deployment) error {
 		return fmt.Errorf("reloading provider: %w", err)
 	}
 
-	ds.CurrentWeight = 100
+	ds.CurrentWeight = d.Config.BlueGreen.GreenWeight
 	if err := bg.state.Save(ds); err != nil {
 		return fmt.Errorf("saving cutover state: %w", err)
 	}
@@ -116,6 +116,7 @@ func (bg *BlueGreen) Execute(ctx context.Context, d *Deployment) error {
 	}
 
 	ds.Status = state.StatusIdle
+	ds.CurrentWeight = 100
 	ds.Containers.Stable = containerIDs(d.New)
 	ds.Containers.Canary = nil
 	if err := bg.state.Save(ds); err != nil {
@@ -127,13 +128,21 @@ func (bg *BlueGreen) Execute(ctx context.Context, d *Deployment) error {
 }
 
 func buildBlueGreenCutoverUpstream(d *Deployment) *provider.UpstreamState {
+	greenWeight := d.Config.BlueGreen.GreenWeight
+	blueWeight := 100 - greenWeight
+
 	upstream := &provider.UpstreamState{
 		Service:      d.Service,
 		UpstreamName: d.UpstreamName(),
+		Affinity:     d.Config.BlueGreen.Affinity,
+	}
+
+	for _, c := range d.Old {
+		upstream.Servers = append(upstream.Servers, provider.Server{Addr: c.Addr, Weight: blueWeight, Group: "stable"})
 	}
 
 	for _, c := range d.New {
-		upstream.Servers = append(upstream.Servers, provider.Server{Addr: c.Addr})
+		upstream.Servers = append(upstream.Servers, provider.Server{Addr: c.Addr, Weight: greenWeight, Group: "canary"})
 	}
 
 	applyNginxKeepalive(d, upstream)

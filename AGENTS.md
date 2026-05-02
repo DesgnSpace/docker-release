@@ -38,7 +38,6 @@ internal/
   strategy/                      linear, blue-green, canary
   state/                         Deployment state persistence (JSON)
   docker/                        Docker API client wrapper
-  healthcheck/                   HTTP health check poller
   monitor/                       Docker event monitor
   rollback/                      Rollback helpers
 scripts/
@@ -134,6 +133,8 @@ docker release status
 | `TraefikConfigDir` | `release.traefik.config_dir` | — |
 | `UpstreamName` | `release.upstream` | service name |
 | `BlueGreen.SoakTime` | `release.bg.soak_time` | `5m` |
+| `BlueGreen.GreenWeight` | `release.bg.green_weight` | `50` |
+| `BlueGreen.Affinity` | `release.bg.affinity` | `ip` |
 | `Canary.StartPercentage` | `release.canary.start_percentage` | `10` |
 | `Canary.Step` | `release.canary.step` | `20` |
 | `Canary.Interval` | `release.canary.interval` | `2m` |

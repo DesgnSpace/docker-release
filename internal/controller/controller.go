@@ -12,7 +12,6 @@ import (
 
 	"github.com/malico/docker-release/internal/config"
 	"github.com/malico/docker-release/internal/docker"
-	"github.com/malico/docker-release/internal/healthcheck"
 	"github.com/malico/docker-release/internal/monitor"
 	"github.com/malico/docker-release/internal/provider"
 	"github.com/malico/docker-release/internal/rollback"
@@ -208,13 +207,13 @@ func (c *Controller) handleStart(ctx context.Context, containerID string, attrs 
 		log.Printf("clearing stale deployment state for %s (last updated: %s)", serviceName, formatTimestamp(ds.UpdatedAt))
 	}
 
-	cfg, err := config.ParseLabels(serviceContainers[0].Labels)
+	cfg, err := config.ParseLabels(new[0].Labels)
 	if err != nil {
 		log.Printf("error parsing labels for %s: %v", serviceName, err)
 		return
 	}
 
-	c.resolveNginxProxyUpstream(ctx, cfg, serviceContainers)
+	c.resolveNginxProxyUpstream(ctx, cfg, new)
 
 	go c.deploy(ctx, serviceName, cfg, old, new)
 }
@@ -281,29 +280,9 @@ func (c *Controller) deploy(parentCtx context.Context, serviceName string, cfg *
 		newIDs[i] = info.ID
 	}
 
-	var dockerOps strategy.DockerOps = c.docker
-	var healthOps monitor.HealthChecker = c.docker
+	strat := c.createStrategy(cfg, prov, c.docker)
 
-	if cfg.HealthCheck.Path != "" {
-		log.Printf("using HTTP health checks for %s (path=%s, interval=%s, retries=%d)",
-			serviceName, cfg.HealthCheck.Path, cfg.HealthCheck.Interval, cfg.HealthCheck.Retries)
-
-		addrMap := make(map[string]string, len(newInfos))
-		for _, info := range newInfos {
-			addrMap[info.ID] = info.Addr
-		}
-
-		checker := healthcheck.New(c.docker, cfg.HealthCheck)
-		checker.Start(deployCtx, newIDs, addrMap)
-		defer checker.Shutdown()
-
-		dockerOps = checker
-		healthOps = checker
-	}
-
-	strat := c.createStrategy(cfg, prov, dockerOps)
-
-	mon := monitor.NewHealthMonitor(healthOps, newIDs, func(containerID, reason string) {
+	mon := monitor.NewHealthMonitor(c.docker, newIDs, func(containerID, reason string) {
 		log.Printf("auto-rollback triggered for %s: %s", serviceName, reason)
 		deployCancel()
 	})
@@ -462,17 +441,17 @@ func (c *Controller) Release(ctx context.Context, service string, force bool) er
 		return fmt.Errorf("no managed containers found for service %q", service)
 	}
 
-	cfg, err := config.ParseLabels(serviceContainers[0].Labels)
-	if err != nil {
-		return fmt.Errorf("parsing labels: %w", err)
-	}
-
-	c.resolveNginxProxyUpstream(ctx, cfg, serviceContainers)
-
 	images := groupByImageID(serviceContainers)
 
 	if len(images) >= 2 {
 		oldContainers, newContainers := splitByImage(serviceContainers, images)
+		cfg, err := config.ParseLabels(newContainers[0].Labels)
+		if err != nil {
+			return fmt.Errorf("parsing labels: %w", err)
+		}
+
+		c.resolveNginxProxyUpstream(ctx, cfg, newContainers)
+
 		log.Printf("releasing %s: %d old → %d new", service, len(oldContainers), len(newContainers))
 		c.wg.Add(1)
 		go func() {
@@ -481,6 +460,13 @@ func (c *Controller) Release(ctx context.Context, service string, force bool) er
 		}()
 		return nil
 	}
+
+	cfg, err := config.ParseLabels(serviceContainers[0].Labels)
+	if err != nil {
+		return fmt.Errorf("parsing labels: %w", err)
+	}
+
+	c.resolveNginxProxyUpstream(ctx, cfg, serviceContainers)
 
 	newContainers, err := c.scaleUp(ctx, serviceContainers)
 	if err != nil {

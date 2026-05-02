@@ -196,6 +196,7 @@ func buildCanaryUpstream(d *Deployment, canaryWeight int) *provider.UpstreamStat
 		upstream.Servers = append(upstream.Servers, provider.Server{
 			Addr:   old.Addr,
 			Weight: stableWeight,
+			Group:  "stable",
 		})
 	}
 
@@ -203,6 +204,7 @@ func buildCanaryUpstream(d *Deployment, canaryWeight int) *provider.UpstreamStat
 		upstream.Servers = append(upstream.Servers, provider.Server{
 			Addr:   cn.Addr,
 			Weight: canaryWeight,
+			Group:  "canary",
 		})
 	}
 	applyNginxKeepalive(d, upstream)

@@ -23,8 +23,6 @@ func TestRenderTraefikBasic(t *testing.T) {
 		"loadBalancer:",
 		`url: "http://172.18.0.5:80"`,
 		`url: "http://172.18.0.6:80"`,
-		"rule: \"Host(`app.local`)\"",
-		"service: app",
 	}
 
 	for _, want := range expects {
@@ -39,6 +37,10 @@ func TestRenderTraefikBasic(t *testing.T) {
 
 	if strings.Contains(got, "sticky") {
 		t.Error("should not have sticky without affinity")
+	}
+
+	if strings.Contains(got, "routers:") || strings.Contains(got, "app.local") {
+		t.Error("should not generate routers by default")
 	}
 }
 
@@ -55,8 +57,7 @@ func TestRenderTraefikWithCookieAffinity(t *testing.T) {
 
 	expects := []string{
 		"sticky:",
-		"cookie:",
-		"name: app_affinity",
+		"cookie: {}",
 	}
 
 	for _, want := range expects {
@@ -89,7 +90,30 @@ func TestRenderTraefikWeighted(t *testing.T) {
 		`url: "http://172.18.0.6:80"`,
 		`url: "http://172.18.0.8:80"`,
 		"sticky:",
-		"name: app_affinity",
+		"cookie: {}",
+	}
+
+	for _, want := range expects {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderTraefikWithIPAffinity(t *testing.T) {
+	state := &UpstreamState{
+		Service:  "app",
+		Affinity: "ip",
+		Servers: []Server{
+			{Addr: "172.18.0.5:80"},
+		},
+	}
+
+	got := renderTraefikYAML(state)
+
+	expects := []string{
+		"sticky:",
+		"cookie: {}",
 	}
 
 	for _, want := range expects {
@@ -104,10 +128,10 @@ func TestRenderTraefikWeightedBlueGreenCutover(t *testing.T) {
 		Service:  "blue_green_app",
 		Affinity: "ip",
 		Servers: []Server{
-			{Addr: "172.18.0.5:80", Weight: 0},
-			{Addr: "172.18.0.6:80", Weight: 0},
-			{Addr: "172.18.0.8:80", Weight: 100},
-			{Addr: "172.18.0.9:80", Weight: 100},
+			{Addr: "172.18.0.5:80", Weight: 50, Group: "stable"},
+			{Addr: "172.18.0.6:80", Weight: 50, Group: "stable"},
+			{Addr: "172.18.0.8:80", Weight: 50, Group: "canary"},
+			{Addr: "172.18.0.9:80", Weight: 50, Group: "canary"},
 		},
 	}
 
@@ -117,7 +141,7 @@ func TestRenderTraefikWeightedBlueGreenCutover(t *testing.T) {
 		"weighted:",
 		"blue_green_app-stable:",
 		"blue_green_app-canary:",
-		"weight: 100",
+		"weight: 50",
 		`url: "http://172.18.0.5:80"`,
 		`url: "http://172.18.0.6:80"`,
 		`url: "http://172.18.0.8:80"`,
@@ -130,8 +154,8 @@ func TestRenderTraefikWeightedBlueGreenCutover(t *testing.T) {
 		}
 	}
 
-	if strings.Contains(got, "weight: 0") {
-		t.Errorf("zero-weight service should be omitted from weighted route:\n%s", got)
+	if strings.Count(got, "weight: 50") != 2 {
+		t.Errorf("expected both weighted groups at 50:\n%s", got)
 	}
 }
 

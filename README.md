@@ -45,7 +45,11 @@ services:
       release.strategy: linear          # linear | blue-green | canary
       release.nginx.container: nginx
       release.nginx.config_dir: /shared/nginx-config
-      release.healthcheck.path: /health
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 ```
 
 See [label reference](#label-reference) for all options.
@@ -118,9 +122,6 @@ services:
       release.strategy: linear
       release.nginx.container: nginx
       release.nginx.config_dir: /shared/nginx-config
-      release.healthcheck.path: /health
-      release.healthcheck.interval: 5s
-      release.healthcheck.retries: 3
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost/health"]
       interval: 10s
@@ -166,6 +167,8 @@ Spins up a full replacement set, waits for all to be healthy, then cuts over all
 ```yaml
 release.strategy: blue-green
 release.bg.soak_time: 5m
+release.bg.green_weight: 50
+release.bg.affinity: ip
 ```
 
 ### Canary
@@ -201,15 +204,13 @@ release.canary.affinity: ip    # ip | cookie
 | `release.angie.config_dir` | — | Shared config volume path inside docker-release |
 | `release.traefik.config_dir` | — | Shared config volume path inside docker-release |
 | `release.bg.soak_time` | `5m` | Blue/Green: hold old containers this long before removal |
+| `release.bg.green_weight` | `50` | Blue/Green: traffic percentage to green during soak |
+| `release.bg.affinity` | `ip` | Blue/Green: session affinity during soak (`ip` or `cookie`) |
 | `release.canary.start_percentage` | `10` | Canary: initial traffic percentage |
 | `release.canary.step` | `20` | Canary: percentage increase per interval |
 | `release.canary.interval` | `2m` | Canary: time between steps |
 | `release.canary.affinity` | `ip` | Canary: session affinity (`ip` or `cookie`) |
-| `release.healthcheck.path` | — | HTTP path for application-level health checks |
-| `release.healthcheck.interval` | `5s` | Health check poll interval |
-| `release.healthcheck.timeout` | `5s` | Health check request timeout |
-| `release.healthcheck.retries` | `3` | Failures before marking unhealthy |
-| `release.healthcheck.start_period` | `0` | Grace period before health checks start |
+Use Docker-native `healthcheck:` on app services. `docker-release` waits for Docker's `healthy` status and listens for Docker health events from the socket.
 
 ---
 

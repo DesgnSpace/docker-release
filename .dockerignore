@@ -1,5 +1,37 @@
+# VCS
+.git/
+.gitignore
+
+# Local env/secrets
+.env
+.env.*
+*.pem
+*.key
+*.crt
+
+# Editor/OS noise
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Build/test outputs
+bin/
+dist/
+build/
+coverage.out
+*.test
+*.prof
+*.log
+
+# Repo-local scratch/vendor comparisons
 docker-autoheal/
 docker-rollout/
 idea.md
-.git/
+
+# Not needed to build the controller image
+docs/
+tests/
+README.md
+AGENTS.md
 *.md

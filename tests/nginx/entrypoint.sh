@@ -2,6 +2,10 @@
 BUILD=$(cat /usr/share/nginx/html/version.txt)
 RANDOM_ID=$(head -c 8 /dev/urandom | base64 | tr -dc a-z0-9 | head -c 6)
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+cat > /usr/share/nginx/html/healthz <<EOF
+ok
+EOF
+
 cat > /usr/share/nginx/html/index.html <<EOF
 <!DOCTYPE html>
 <html lang="en">

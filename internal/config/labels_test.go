@@ -12,6 +12,8 @@ func TestParseLabels(t *testing.T) {
 		"release.strategy":                "canary",
 		"release.health_check_timeout":    "30s",
 		"release.bg.soak_time":            "2m",
+		"release.bg.green_weight":         "60",
+		"release.bg.affinity":             "cookie",
 		"release.canary.start_percentage": "25",
 		"release.canary.step":             "10",
 		"release.canary.interval":         "1m",
@@ -39,6 +41,12 @@ func TestParseLabels(t *testing.T) {
 	}
 	if cfg.BlueGreen.SoakTime != 2*time.Minute {
 		t.Errorf("soak_time = %v, want 2m", cfg.BlueGreen.SoakTime)
+	}
+	if cfg.BlueGreen.GreenWeight != 60 {
+		t.Errorf("green_weight = %d, want 60", cfg.BlueGreen.GreenWeight)
+	}
+	if cfg.BlueGreen.Affinity != "cookie" {
+		t.Errorf("blue-green affinity = %s, want cookie", cfg.BlueGreen.Affinity)
 	}
 	if cfg.Canary.StartPercentage != 25 {
 		t.Errorf("start_percentage = %d, want 25", cfg.Canary.StartPercentage)
@@ -78,6 +86,12 @@ func TestParseLabelsDefaults(t *testing.T) {
 	}
 	if cfg.Canary.StartPercentage != 10 {
 		t.Errorf("default start_percentage = %d, want 10", cfg.Canary.StartPercentage)
+	}
+	if cfg.BlueGreen.GreenWeight != 50 {
+		t.Errorf("default green_weight = %d, want 50", cfg.BlueGreen.GreenWeight)
+	}
+	if cfg.BlueGreen.Affinity != "ip" {
+		t.Errorf("default blue-green affinity = %s, want ip", cfg.BlueGreen.Affinity)
 	}
 	if cfg.Canary.Step != 20 {
 		t.Errorf("default step = %d, want 20", cfg.Canary.Step)
@@ -142,65 +156,6 @@ func TestParseLabelsNoneProvider(t *testing.T) {
 	}
 }
 
-func TestParseLabelsHealthCheck(t *testing.T) {
-	labels := map[string]string{
-		"release.enable":                   "true",
-		"release.healthcheck.path":         "/health",
-		"release.healthcheck.interval":     "10s",
-		"release.healthcheck.timeout":      "3s",
-		"release.healthcheck.retries":      "5",
-		"release.healthcheck.start_period": "30s",
-	}
-
-	cfg, err := ParseLabels(labels)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if cfg.HealthCheck.Path != "/health" {
-		t.Errorf("healthcheck.path = %s, want /health", cfg.HealthCheck.Path)
-	}
-	if cfg.HealthCheck.Interval != 10*time.Second {
-		t.Errorf("healthcheck.interval = %v, want 10s", cfg.HealthCheck.Interval)
-	}
-	if cfg.HealthCheck.Timeout != 3*time.Second {
-		t.Errorf("healthcheck.timeout = %v, want 3s", cfg.HealthCheck.Timeout)
-	}
-	if cfg.HealthCheck.Retries != 5 {
-		t.Errorf("healthcheck.retries = %d, want 5", cfg.HealthCheck.Retries)
-	}
-	if cfg.HealthCheck.StartPeriod != 30*time.Second {
-		t.Errorf("healthcheck.start_period = %v, want 30s", cfg.HealthCheck.StartPeriod)
-	}
-}
-
-func TestParseLabelsHealthCheckDefaults(t *testing.T) {
-	labels := map[string]string{
-		"release.enable": "true",
-	}
-
-	cfg, err := ParseLabels(labels)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if cfg.HealthCheck.Path != "" {
-		t.Errorf("default healthcheck.path = %s, want empty", cfg.HealthCheck.Path)
-	}
-	if cfg.HealthCheck.Interval != 5*time.Second {
-		t.Errorf("default healthcheck.interval = %v, want 5s", cfg.HealthCheck.Interval)
-	}
-	if cfg.HealthCheck.Timeout != 5*time.Second {
-		t.Errorf("default healthcheck.timeout = %v, want 5s", cfg.HealthCheck.Timeout)
-	}
-	if cfg.HealthCheck.Retries != 3 {
-		t.Errorf("default healthcheck.retries = %d, want 3", cfg.HealthCheck.Retries)
-	}
-	if cfg.HealthCheck.StartPeriod != 0 {
-		t.Errorf("default healthcheck.start_period = %v, want 0", cfg.HealthCheck.StartPeriod)
-	}
-}
-
 func TestParseLabelsInvalidPercentage(t *testing.T) {
 	labels := map[string]string{
 		"release.enable":                  "true",
@@ -210,5 +165,17 @@ func TestParseLabelsInvalidPercentage(t *testing.T) {
 	_, err := ParseLabels(labels)
 	if err == nil {
 		t.Fatal("expected error for percentage < 1")
+	}
+}
+
+func TestParseLabelsInvalidBlueGreenWeight(t *testing.T) {
+	labels := map[string]string{
+		"release.enable":          "true",
+		"release.bg.green_weight": "0",
+	}
+
+	_, err := ParseLabels(labels)
+	if err == nil {
+		t.Fatal("expected error for blue-green weight < 1")
 	}
 }

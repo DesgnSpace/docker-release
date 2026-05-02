@@ -52,8 +52,6 @@ func renderTraefikYAML(state *UpstreamState) string {
 		renderLoadBalancerService(&b, state)
 	}
 
-	renderRouter(&b, state)
-
 	return b.String()
 }
 
@@ -71,10 +69,9 @@ func renderLoadBalancerService(b *strings.Builder, state *UpstreamState) {
 	fmt.Fprintf(b, "    %s:\n", state.Service)
 	b.WriteString("      loadBalancer:\n")
 
-	if state.Affinity == "cookie" {
+	if state.Affinity != "" {
 		b.WriteString("        sticky:\n")
-		b.WriteString("          cookie:\n")
-		fmt.Fprintf(b, "            name: %s_affinity\n", state.Service)
+		b.WriteString("          cookie: {}\n")
 	}
 
 	b.WriteString("        servers:\n")
@@ -102,6 +99,18 @@ func renderWeightedService(b *strings.Builder, state *UpstreamState) {
 
 	for _, s := range state.Servers {
 		if s.Down {
+			continue
+		}
+
+		if s.Group == "stable" {
+			stableWeight = s.Weight
+			stableServers = append(stableServers, s)
+			continue
+		}
+
+		if s.Group == "canary" {
+			canaryWeight = s.Weight
+			canaryServers = append(canaryServers, s)
 			continue
 		}
 
@@ -143,10 +152,9 @@ func renderWeightedService(b *strings.Builder, state *UpstreamState) {
 		fmt.Fprintf(b, "            weight: %d\n", canaryWeight)
 	}
 
-	if state.Affinity == "cookie" {
+	if state.Affinity != "" {
 		b.WriteString("        sticky:\n")
-		b.WriteString("          cookie:\n")
-		fmt.Fprintf(b, "            name: %s_affinity\n", state.Service)
+		b.WriteString("          cookie: {}\n")
 	}
 
 	fmt.Fprintf(b, "    %s:\n", stableName)
@@ -164,11 +172,4 @@ func renderWeightedService(b *strings.Builder, state *UpstreamState) {
 			fmt.Fprintf(b, "          - url: \"http://%s\"\n", s.Addr)
 		}
 	}
-}
-
-func renderRouter(b *strings.Builder, state *UpstreamState) {
-	b.WriteString("  routers:\n")
-	fmt.Fprintf(b, "    %s:\n", state.Service)
-	fmt.Fprintf(b, "      rule: \"Host(`%s.local`)\"\n", state.Service)
-	fmt.Fprintf(b, "      service: %s\n", state.Service)
 }

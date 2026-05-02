@@ -3,19 +3,14 @@ services:
     build:
       context: ../../
       dockerfile: Dockerfile
+    command: ["watch"]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - traefik-dynamic:/shared/traefik-config:rw
-    command: ["watch"]
+      - docker-release-state:/var/lib/docker-release:rw
 
   traefik:
     image: traefik:v3.4
-    ports:
-      - "8082:80"
-      - "8083:8080"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - traefik-dynamic:/etc/traefik/dynamic:ro
     command:
       - "--api.insecure=true"
       - "--entrypoints.web.address=:80"
@@ -23,6 +18,12 @@ services:
       - "--providers.docker.exposedbydefault=false"
       - "--providers.file.directory=/etc/traefik/dynamic"
       - "--providers.file.watch=true"
+    ports:
+      - "8082:80"
+      - "8083:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-dynamic:/etc/traefik/dynamic:ro
 
   linear_app:
     build:
@@ -39,13 +40,9 @@ services:
       - "release.enable=true"
       - "release.provider=traefik"
       - "release.strategy=linear"
+      - "release.drain_timeout=5s"
       - "release.health_check_timeout=30s"
       - "release.traefik.config_dir=/shared/traefik-config"
-      - "release.healthcheck.path=/"
-      - "release.healthcheck.interval=5s"
-      - "release.healthcheck.timeout=3s"
-      - "release.healthcheck.retries=3"
-      - "release.healthcheck.start_period=10s"
       - "traefik.enable=true"
       - "traefik.http.routers.linear-app.rule=PathPrefix(`/linear`)"
       - "traefik.http.routers.linear-app.service=linear_app@file"
@@ -71,13 +68,9 @@ services:
       - "release.canary.step=25"
       - "release.canary.interval=10s"
       - "release.canary.affinity=cookie"
+      - "release.drain_timeout=5s"
       - "release.health_check_timeout=30s"
       - "release.traefik.config_dir=/shared/traefik-config"
-      - "release.healthcheck.path=/"
-      - "release.healthcheck.interval=5s"
-      - "release.healthcheck.timeout=3s"
-      - "release.healthcheck.retries=3"
-      - "release.healthcheck.start_period=10s"
       - "traefik.enable=true"
       - "traefik.http.routers.canary-app.rule=PathPrefix(`/canary`)"
       - "traefik.http.routers.canary-app.service=canary_app@file"
@@ -100,13 +93,11 @@ services:
       - "release.provider=traefik"
       - "release.strategy=blue-green"
       - "release.bg.soak_time=30s"
+      - "release.bg.green_weight=50"
+      - "release.bg.affinity=ip"
+      - "release.drain_timeout=5s"
       - "release.health_check_timeout=30s"
       - "release.traefik.config_dir=/shared/traefik-config"
-      - "release.healthcheck.path=/"
-      - "release.healthcheck.interval=5s"
-      - "release.healthcheck.timeout=3s"
-      - "release.healthcheck.retries=3"
-      - "release.healthcheck.start_period=10s"
       - "traefik.enable=true"
       - "traefik.http.routers.blue-green-app.rule=PathPrefix(`/bluegreen`)"
       - "traefik.http.routers.blue-green-app.service=blue_green_app@file"
@@ -114,4 +105,5 @@ services:
       - "traefik.http.middlewares.strip-blue-green.stripprefix.prefixes=/bluegreen"
 
 volumes:
+  docker-release-state:
   traefik-dynamic:
