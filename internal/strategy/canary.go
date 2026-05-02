@@ -96,18 +96,18 @@ func (c *Canary) Execute(ctx context.Context, d *Deployment) error {
 
 	log.Printf("[canary] promoting canary to 100%%")
 
-	finalUpstream := &provider.UpstreamState{Service: d.Service, UpstreamName: d.UpstreamName()}
+	finalUpstream := &provider.UpstreamState{Service: d.Service, UpstreamName: d.UpstreamName(), Affinity: d.Config.Affinity}
 	for _, cn := range d.New {
 		finalUpstream.Servers = append(finalUpstream.Servers, provider.Server{Addr: cn.Addr})
 	}
 	applyNginxKeepalive(d, finalUpstream)
 
 	if err := c.provider.GenerateConfig(finalUpstream); err != nil {
-		return fmt.Errorf("generating final config: %w", err)
+		return fmt.Errorf("generating final deployment config: %w", err)
 	}
 
 	if err := c.provider.Reload(); err != nil {
-		return fmt.Errorf("reloading final: %w", err)
+		return fmt.Errorf("reloading final deployment: %w", err)
 	}
 
 	log.Printf("[canary] draining old containers for %s", d.Config.DrainTimeout)
@@ -116,6 +116,20 @@ func (c *Canary) Execute(ctx context.Context, d *Deployment) error {
 	case <-time.After(d.Config.DrainTimeout):
 	case <-ctx.Done():
 		return ctx.Err()
+	}
+
+	stableUpstream := &provider.UpstreamState{Service: d.Service, UpstreamName: d.UpstreamName()}
+	for _, cn := range d.New {
+		stableUpstream.Servers = append(stableUpstream.Servers, provider.Server{Addr: cn.Addr})
+	}
+	applyNginxKeepalive(d, stableUpstream)
+
+	if err := c.provider.GenerateConfig(stableUpstream); err != nil {
+		return fmt.Errorf("generating final stable config: %w", err)
+	}
+
+	if err := c.provider.Reload(); err != nil {
+		return fmt.Errorf("reloading final stable: %w", err)
 	}
 
 	for _, old := range d.Old {
