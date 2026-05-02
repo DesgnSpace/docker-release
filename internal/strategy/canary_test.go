@@ -17,11 +17,11 @@ func canaryDeployment() *Deployment {
 		Config: &config.ServiceConfig{
 			HealthCheckTimeout: time.Second,
 			DrainTimeout:       time.Millisecond,
+			Affinity:           "cookie",
 			Canary: config.CanaryConfig{
 				StartPercentage: 25,
 				Step:            25,
 				Interval:        time.Millisecond,
-				Affinity:        "ip",
 			},
 		},
 		Old: []ContainerInfo{
@@ -87,8 +87,8 @@ func TestCanaryWeightProgression(t *testing.T) {
 	for i, w := range expectedWeights {
 		cfg := prov.configs[i]
 
-		if cfg.Affinity != "ip" {
-			t.Errorf("step %d: expected ip affinity, got %s", i, cfg.Affinity)
+		if cfg.Affinity != "cookie" {
+			t.Errorf("step %d: expected cookie affinity, got %s", i, cfg.Affinity)
 		}
 
 		foundCanaryWeight := false

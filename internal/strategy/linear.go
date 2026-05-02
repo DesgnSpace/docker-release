@@ -114,14 +114,30 @@ func (l *Linear) Execute(ctx context.Context, d *Deployment) error {
 		}
 	}
 
-	upstream := l.buildFinalUpstream(d)
+	upstream := l.buildFinalUpstream(d, d.Config.Affinity)
 	applyNginxKeepalive(d, upstream)
 	if err := l.provider.GenerateConfig(upstream); err != nil {
-		return fmt.Errorf("generating final config: %w", err)
+		return fmt.Errorf("generating final deployment config: %w", err)
 	}
 
 	if err := l.provider.Reload(); err != nil {
-		return fmt.Errorf("reloading provider: %w", err)
+		return fmt.Errorf("reloading final deployment config: %w", err)
+	}
+
+	select {
+	case <-time.After(d.Config.DrainTimeout):
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
+	stableUpstream := l.buildFinalUpstream(d, "")
+	applyNginxKeepalive(d, stableUpstream)
+	if err := l.provider.GenerateConfig(stableUpstream); err != nil {
+		return fmt.Errorf("generating final stable config: %w", err)
+	}
+
+	if err := l.provider.Reload(); err != nil {
+		return fmt.Errorf("reloading final stable config: %w", err)
 	}
 
 	ds.Status = state.StatusIdle
@@ -182,7 +198,7 @@ func (l *Linear) Rollback(ctx context.Context, d *Deployment) error {
 }
 
 func (l *Linear) buildUpstream(d *Deployment, step int) *provider.UpstreamState {
-	upstream := &provider.UpstreamState{Service: d.Service, UpstreamName: d.UpstreamName()}
+	upstream := &provider.UpstreamState{Service: d.Service, UpstreamName: d.UpstreamName(), Affinity: d.Config.Affinity}
 
 	for j := 0; j <= step; j++ {
 		upstream.Servers = append(upstream.Servers, provider.Server{Addr: d.New[j].Addr})
@@ -200,8 +216,8 @@ func (l *Linear) buildUpstream(d *Deployment, step int) *provider.UpstreamState 
 	return upstream
 }
 
-func (l *Linear) buildFinalUpstream(d *Deployment) *provider.UpstreamState {
-	upstream := &provider.UpstreamState{Service: d.Service, UpstreamName: d.UpstreamName()}
+func (l *Linear) buildFinalUpstream(d *Deployment, affinity string) *provider.UpstreamState {
+	upstream := &provider.UpstreamState{Service: d.Service, UpstreamName: d.UpstreamName(), Affinity: affinity}
 
 	for _, c := range d.New {
 		upstream.Servers = append(upstream.Servers, provider.Server{Addr: c.Addr})

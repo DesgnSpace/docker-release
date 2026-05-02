@@ -57,6 +57,7 @@ func testDeployment(oldCount, newCount int) *Deployment {
 		Config: &config.ServiceConfig{
 			HealthCheckTimeout: time.Second,
 			DrainTimeout:       time.Millisecond,
+			Affinity:           "cookie",
 		},
 	}
 
@@ -101,12 +102,12 @@ func TestLinearExecuteBasic(t *testing.T) {
 		t.Errorf("expected 2 removes, got %d", len(docker.removeCalls))
 	}
 
-	if len(prov.configs) != 3 {
-		t.Errorf("expected 3 config generations, got %d", len(prov.configs))
+	if len(prov.configs) != 4 {
+		t.Errorf("expected 4 config generations, got %d", len(prov.configs))
 	}
 
-	if prov.reloads != 3 {
-		t.Errorf("expected 3 reloads, got %d", prov.reloads)
+	if prov.reloads != 4 {
+		t.Errorf("expected 4 reloads, got %d", prov.reloads)
 	}
 
 	for i, id := range docker.stopCalls {
@@ -152,8 +153,8 @@ func TestLinearConfigAtEachStep(t *testing.T) {
 		t.Fatalf("execute: %v", err)
 	}
 
-	if len(prov.configs) != 3 {
-		t.Fatalf("expected 3 configs, got %d", len(prov.configs))
+	if len(prov.configs) != 4 {
+		t.Fatalf("expected 4 configs, got %d", len(prov.configs))
 	}
 
 	cfg0 := prov.configs[0]
@@ -197,8 +198,17 @@ func TestLinearConfigAtEachStep(t *testing.T) {
 	cfg2 := prov.configs[2]
 	for _, s := range cfg2.Servers {
 		if s.Down {
-			t.Error("final config should not have down servers")
+			t.Error("final deployment config should not have down servers")
 		}
+	}
+
+	if cfg2.Affinity == "" {
+		t.Error("final deployment config should keep affinity")
+	}
+
+	cfg3 := prov.configs[3]
+	if cfg3.Affinity != "" {
+		t.Error("final stable config should clear affinity")
 	}
 }
 

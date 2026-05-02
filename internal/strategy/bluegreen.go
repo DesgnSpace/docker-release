@@ -134,7 +134,7 @@ func buildBlueGreenCutoverUpstream(d *Deployment) *provider.UpstreamState {
 	upstream := &provider.UpstreamState{
 		Service:      d.Service,
 		UpstreamName: d.UpstreamName(),
-		Affinity:     d.Config.BlueGreen.Affinity,
+		Affinity:     d.Config.Affinity,
 	}
 
 	for _, c := range d.Old {

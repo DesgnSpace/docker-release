@@ -111,15 +111,30 @@ func TestRenderTraefikWithIPAffinity(t *testing.T) {
 
 	got := renderTraefikYAML(state)
 
-	expects := []string{
-		"sticky:",
-		"cookie: {}",
+	if !strings.Contains(got, "sticky:") {
+		t.Error("ip affinity should fall back to sticky cookie in Traefik")
+	}
+	if !strings.Contains(got, "cookie: {}") {
+		t.Error("ip affinity should use sticky cookie in Traefik")
+	}
+}
+
+func TestRenderTraefikDisabledAffinity(t *testing.T) {
+	state := &UpstreamState{
+		Service:  "app",
+		Affinity: "",
+		Servers: []Server{
+			{Addr: "172.18.0.5:80"},
+		},
 	}
 
-	for _, want := range expects {
-		if !strings.Contains(got, want) {
-			t.Errorf("missing %q in:\n%s", want, got)
-		}
+	got := renderTraefikYAML(state)
+
+	if strings.Contains(got, "sticky:") {
+		t.Error("disabled affinity should not have sticky section")
+	}
+	if strings.Contains(got, "cookie:") {
+		t.Error("disabled affinity should not have cookie section")
 	}
 }
 

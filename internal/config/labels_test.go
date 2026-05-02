@@ -11,13 +11,12 @@ func TestParseLabels(t *testing.T) {
 		"release.provider":                "nginx-proxy",
 		"release.strategy":                "canary",
 		"release.health_check_timeout":    "30s",
+		"release.affinity":                "cookie",
 		"release.bg.soak_time":            "2m",
 		"release.bg.green_weight":         "60",
-		"release.bg.affinity":             "cookie",
 		"release.canary.start_percentage": "25",
 		"release.canary.step":             "10",
 		"release.canary.interval":         "1m",
-		"release.canary.affinity":         "cookie",
 		"release.nginx.container":         "my-nginx",
 		"release.nginx.keepalive":         "20",
 	}
@@ -39,14 +38,14 @@ func TestParseLabels(t *testing.T) {
 	if cfg.HealthCheckTimeout != 30*time.Second {
 		t.Errorf("health_check_timeout = %v, want 30s", cfg.HealthCheckTimeout)
 	}
+	if cfg.Affinity != "cookie" {
+		t.Errorf("affinity = %s, want cookie", cfg.Affinity)
+	}
 	if cfg.BlueGreen.SoakTime != 2*time.Minute {
 		t.Errorf("soak_time = %v, want 2m", cfg.BlueGreen.SoakTime)
 	}
 	if cfg.BlueGreen.GreenWeight != 60 {
 		t.Errorf("green_weight = %d, want 60", cfg.BlueGreen.GreenWeight)
-	}
-	if cfg.BlueGreen.Affinity != "cookie" {
-		t.Errorf("blue-green affinity = %s, want cookie", cfg.BlueGreen.Affinity)
 	}
 	if cfg.Canary.StartPercentage != 25 {
 		t.Errorf("start_percentage = %d, want 25", cfg.Canary.StartPercentage)
@@ -56,9 +55,6 @@ func TestParseLabels(t *testing.T) {
 	}
 	if cfg.Canary.Interval != 1*time.Minute {
 		t.Errorf("interval = %v, want 1m", cfg.Canary.Interval)
-	}
-	if cfg.Canary.Affinity != "cookie" {
-		t.Errorf("affinity = %s, want cookie", cfg.Canary.Affinity)
 	}
 	if cfg.NginxKeepalive != 20 {
 		t.Errorf("nginx.keepalive = %d, want 20", cfg.NginxKeepalive)
@@ -90,8 +86,8 @@ func TestParseLabelsDefaults(t *testing.T) {
 	if cfg.BlueGreen.GreenWeight != 50 {
 		t.Errorf("default green_weight = %d, want 50", cfg.BlueGreen.GreenWeight)
 	}
-	if cfg.BlueGreen.Affinity != "ip" {
-		t.Errorf("default blue-green affinity = %s, want ip", cfg.BlueGreen.Affinity)
+	if cfg.Affinity != "cookie" {
+		t.Errorf("default affinity = %s, want cookie", cfg.Affinity)
 	}
 	if cfg.Canary.Step != 20 {
 		t.Errorf("default step = %d, want 20", cfg.Canary.Step)
@@ -177,5 +173,33 @@ func TestParseLabelsInvalidBlueGreenWeight(t *testing.T) {
 	_, err := ParseLabels(labels)
 	if err == nil {
 		t.Fatal("expected error for blue-green weight < 1")
+	}
+}
+
+func TestParseLabelsInvalidAffinity(t *testing.T) {
+	labels := map[string]string{
+		"release.enable":   "true",
+		"release.affinity": "random",
+	}
+
+	_, err := ParseLabels(labels)
+	if err == nil {
+		t.Fatal("expected error for invalid affinity")
+	}
+}
+
+func TestParseLabelsDisabledAffinity(t *testing.T) {
+	labels := map[string]string{
+		"release.enable":   "true",
+		"release.affinity": "",
+	}
+
+	cfg, err := ParseLabels(labels)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Affinity != "" {
+		t.Errorf("affinity = %q, want empty", cfg.Affinity)
 	}
 }

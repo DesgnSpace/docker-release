@@ -128,6 +128,28 @@ func TestRenderUpstreamCookieAffinityFallsBackToIpHash(t *testing.T) {
 	if !strings.Contains(got, "ip_hash;") {
 		t.Error("cookie affinity should fall back to ip_hash for nginx")
 	}
+	if strings.Contains(got, "least_conn") {
+		t.Error("least_conn should not be present with cookie affinity")
+	}
+}
+
+func TestRenderUpstreamDisabledAffinity(t *testing.T) {
+	state := &UpstreamState{
+		Service:  "app",
+		Affinity: "",
+		Servers: []Server{
+			{Addr: "172.18.0.5:80"},
+		},
+	}
+
+	got := renderUpstream(state)
+
+	if !strings.Contains(got, "least_conn;") {
+		t.Error("disabled affinity should use least_conn")
+	}
+	if strings.Contains(got, "ip_hash") {
+		t.Error("ip_hash should not be present with disabled affinity")
+	}
 }
 
 func TestGenerateConfigWritesFile(t *testing.T) {

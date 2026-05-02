@@ -11,7 +11,9 @@ type UpstreamState struct {
 	Service      string
 	UpstreamName string // overrides Service for upstream naming (e.g. VIRTUAL_HOST for nginx-proxy)
 	Servers      []Server
-	Affinity     string // "ip", "cookie", or ""
+	Affinity     string // "cookie" (default), "ip", or "" (disabled)
+	             // cookie: nginx→ip_hash (OSS has no sticky), angie→sticky cookie, traefik→sticky.cookie
+	             // ip: nginx/angie→ip_hash, traefik→sticky.cookie (no ip-hash in traefik)
 	Keepalive    int    // 0 disables keepalive
 }
 

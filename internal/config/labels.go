@@ -30,6 +30,7 @@ type ServiceConfig struct {
 	Strategy           Strategy
 	HealthCheckTimeout time.Duration
 	DrainTimeout       time.Duration
+	Affinity           string
 	NginxContainer     string
 	NginxConfigDir     string
 	NginxKeepalive     int
@@ -46,14 +47,12 @@ type ServiceConfig struct {
 type BlueGreenConfig struct {
 	SoakTime    time.Duration
 	GreenWeight int
-	Affinity    string
 }
 
 type CanaryConfig struct {
 	StartPercentage int
 	Step            int
 	Interval        time.Duration
-	Affinity        string
 }
 
 func ParseLabels(labels map[string]string) (*ServiceConfig, error) {
@@ -67,6 +66,7 @@ func ParseLabels(labels map[string]string) (*ServiceConfig, error) {
 		Strategy:           Strategy(getOr(labels, "release.strategy", "linear")),
 		HealthCheckTimeout: parseDurationOr(labels, "release.health_check_timeout", 60*time.Second),
 		DrainTimeout:       parseDurationOr(labels, "release.drain_timeout", 10*time.Second),
+		Affinity:           resolveAffinity(labels),
 		NginxContainer:     getOr(labels, "release.nginx.container", ""),
 		NginxConfigDir:     getOr(labels, "release.nginx.config_dir", ""),
 		NginxKeepalive:     parseIntOr(labels, "release.nginx.keepalive", -1),
@@ -79,14 +79,12 @@ func ParseLabels(labels map[string]string) (*ServiceConfig, error) {
 		BlueGreen: BlueGreenConfig{
 			SoakTime:    parseDurationOr(labels, "release.bg.soak_time", 5*time.Minute),
 			GreenWeight: parseIntOr(labels, "release.bg.green_weight", 50),
-			Affinity:    getOr(labels, "release.bg.affinity", "ip"),
 		},
 
 		Canary: CanaryConfig{
 			StartPercentage: parseIntOr(labels, "release.canary.start_percentage", 10),
 			Step:            parseIntOr(labels, "release.canary.step", 20),
 			Interval:        parseDurationOr(labels, "release.canary.interval", 2*time.Minute),
-			Affinity:        getOr(labels, "release.canary.affinity", "ip"),
 		},
 	}
 
@@ -108,6 +106,12 @@ func (c *ServiceConfig) validate() error {
 	case StrategyLinear, StrategyBlueGreen, StrategyCanary:
 	default:
 		return fmt.Errorf("unknown strategy: %s", c.Strategy)
+	}
+
+	switch c.Affinity {
+	case "cookie", "ip", "":
+	default:
+		return fmt.Errorf("affinity must be cookie, ip, or empty, got %q", c.Affinity)
 	}
 
 	if c.Canary.StartPercentage < 1 || c.Canary.StartPercentage > 100 {
@@ -162,6 +166,14 @@ func getOr(labels map[string]string, key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func resolveAffinity(labels map[string]string) string {
+	v, ok := labels["release.affinity"]
+	if !ok {
+		return "cookie"
+	}
+	return v
 }
 
 func parseIntOr(labels map[string]string, key string, fallback int) int {

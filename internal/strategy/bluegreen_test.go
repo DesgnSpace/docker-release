@@ -17,10 +17,10 @@ func bgDeployment() *Deployment {
 		Config: &config.ServiceConfig{
 			HealthCheckTimeout: time.Second,
 			DrainTimeout:       time.Millisecond,
+			Affinity:           "cookie",
 			BlueGreen: config.BlueGreenConfig{
 				SoakTime:    time.Millisecond,
 				GreenWeight: 60,
-				Affinity:    "ip",
 			},
 		},
 		Old: []ContainerInfo{
@@ -58,8 +58,8 @@ func TestBlueGreenExecute(t *testing.T) {
 	if len(soak.Servers) != 4 {
 		t.Errorf("expected 4 servers in weighted soak config (blue+green), got %d", len(soak.Servers))
 	}
-	if soak.Affinity != "ip" {
-		t.Errorf("expected ip affinity during soak, got %q", soak.Affinity)
+	if soak.Affinity != "cookie" {
+		t.Errorf("expected cookie affinity during soak, got %q", soak.Affinity)
 	}
 	for _, s := range soak.Servers {
 		want := 40

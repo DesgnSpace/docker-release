@@ -184,12 +184,11 @@ func (c *Canary) Rollback(ctx context.Context, d *Deployment) error {
 
 func buildCanaryUpstream(d *Deployment, canaryWeight int) *provider.UpstreamState {
 	stableWeight := 100 - canaryWeight
-	affinity := d.Config.Canary.Affinity
 
 	upstream := &provider.UpstreamState{
 		Service:      d.Service,
 		UpstreamName: d.UpstreamName(),
-		Affinity:     affinity,
+		Affinity:     d.Config.Affinity,
 	}
 
 	for _, old := range d.Old {

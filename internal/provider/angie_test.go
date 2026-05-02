@@ -57,6 +57,28 @@ func TestAngieRenderUpstreamAffinity(t *testing.T) {
 	}
 }
 
+func TestAngieRenderUpstreamCookieAffinity(t *testing.T) {
+	state := &UpstreamState{
+		Service:  "app",
+		Affinity: "cookie",
+		Servers: []Server{
+			{Addr: "172.18.0.5:80"},
+		},
+	}
+
+	got := renderAngieUpstream(state)
+
+	if !strings.Contains(got, "sticky cookie _srv path=/;") {
+		t.Error("cookie affinity should use sticky cookie for Angie")
+	}
+	if strings.Contains(got, "ip_hash") {
+		t.Error("cookie affinity should not use ip_hash in Angie")
+	}
+	if strings.Contains(got, "least_conn") {
+		t.Error("least_conn should not be present with cookie affinity")
+	}
+}
+
 func TestAngieRenderUpstreamWithWeights(t *testing.T) {
 	state := &UpstreamState{
 		Service:  "app",
@@ -75,6 +97,29 @@ func TestAngieRenderUpstreamWithWeights(t *testing.T) {
 	}
 	if !strings.Contains(got, "server 172.18.0.5:80 weight=90;") {
 		t.Error("missing weighted server 1")
+	}
+	if !strings.Contains(got, "server 172.18.0.8:80 weight=10;") {
+		t.Error("missing canary server")
+	}
+}
+
+func TestAngieCookieAffinityWithWeights(t *testing.T) {
+	state := &UpstreamState{
+		Service:  "app",
+		Affinity: "cookie",
+		Servers: []Server{
+			{Addr: "172.18.0.5:80", Weight: 90},
+			{Addr: "172.18.0.8:80", Weight: 10},
+		},
+	}
+
+	got := renderAngieUpstream(state)
+
+	if !strings.Contains(got, "sticky cookie _srv path=/;") {
+		t.Error("missing sticky cookie for Angie")
+	}
+	if !strings.Contains(got, "server 172.18.0.5:80 weight=90;") {
+		t.Error("missing weighted server")
 	}
 	if !strings.Contains(got, "server 172.18.0.8:80 weight=10;") {
 		t.Error("missing canary server")

@@ -852,6 +852,7 @@ func (c *Controller) generateServiceConfig(ctx context.Context, name string, cfg
 	upstream := &provider.UpstreamState{
 		Service:      name,
 		UpstreamName: cfg.UpstreamName,
+		Affinity:     cfg.Affinity,
 	}
 
 	for _, ctr := range containers {
