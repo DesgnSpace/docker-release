@@ -115,6 +115,27 @@ func (c *Client) FindContainerByService(ctx context.Context, serviceName string)
 	return containers[0].ID, nil
 }
 
+func (c *Client) MaxServiceContainerNumber(ctx context.Context, project, service string) int {
+	f := filters.NewArgs()
+	if project != "" {
+		f.Add("label", fmt.Sprintf("com.docker.compose.project=%s", project))
+	}
+	f.Add("label", fmt.Sprintf("com.docker.compose.service=%s", service))
+
+	containers, err := c.api.ContainerList(ctx, container.ListOptions{All: true, Filters: f})
+	if err != nil {
+		return 0
+	}
+
+	max := 0
+	for _, ctr := range containers {
+		if n, err := strconv.Atoi(ctr.Labels["com.docker.compose.container-number"]); err == nil && n > max {
+			max = n
+		}
+	}
+	return max
+}
+
 func (c *Client) CreateContainerFromImage(ctx context.Context, ref types.Container, num int) (string, error) {
 	refInfo, err := c.api.ContainerInspect(ctx, ref.ID)
 	if err != nil {
@@ -125,7 +146,7 @@ func (c *Client) CreateContainerFromImage(ctx context.Context, ref types.Contain
 	for k, v := range ref.Labels {
 		labels[k] = v
 	}
-	labels["com.docker.compose.container.number"] = strconv.Itoa(num)
+	labels["com.docker.compose.container-number"] = strconv.Itoa(num)
 
 	cfg := &container.Config{
 		Image:        refInfo.Config.Image,

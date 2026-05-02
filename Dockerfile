@@ -1,10 +1,11 @@
 FROM golang:1.24-alpine AS builder
 
+ARG VERSION=dev
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=0.1.0" -o /bin/dr ./cmd/docker-release/
+RUN CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${VERSION}" -o /bin/dr ./cmd/docker-release/
 
 FROM alpine:3.21
 RUN apk add --no-cache ca-certificates

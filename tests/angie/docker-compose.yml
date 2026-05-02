@@ -5,23 +5,21 @@ services:
       dockerfile: Dockerfile
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - traefik-dynamic:/shared/traefik-config:rw
+      - angie-config:/shared/angie-config:rw
     command: ["watch"]
 
-  traefik:
-    image: traefik:v3.4
+  angie:
+    image: docker.angie.software/angie:latest
     ports:
-      - "8082:80"
-      - "8083:8080"
+      - "8085:80"
     volumes:
-      - traefik-dynamic:/etc/traefik/dynamic:ro
-    command:
-      - "--api.insecure=true"
-      - "--entrypoints.web.address=:80"
-      - "--providers.file.directory=/etc/traefik/dynamic"
-      - "--providers.file.watch=true"
+      - angie-config:/etc/angie/conf.d/custom:ro
+      - ./angie.conf:/etc/angie/conf.d/default.conf:ro
+    depends_on:
+      docker-release:
+        condition: service_started
 
-  app:
+  linear_app:
     build:
       context: ..
       dockerfile: app.Dockerfile
@@ -34,10 +32,12 @@ services:
         condition: service_started
     labels:
       - "release.enable=true"
-      - "release.provider=traefik"
+      - "release.provider=angie"
       - "release.strategy=linear"
-      - "release.health_check_timeout=30s"
-      - "release.traefik.config_dir=/shared/traefik-config"
+      - "release.health_check_timeout=20s"
+      - "release.drain_timeout=5s"
+      - "release.angie.container=angie"
+      - "release.angie.config_dir=/shared/angie-config"
       - "release.healthcheck.path=/"
       - "release.healthcheck.interval=5s"
       - "release.healthcheck.timeout=3s"
@@ -57,14 +57,15 @@ services:
         condition: service_started
     labels:
       - "release.enable=true"
-      - "release.provider=traefik"
+      - "release.provider=angie"
       - "release.strategy=canary"
       - "release.canary.start_percentage=25"
       - "release.canary.step=25"
       - "release.canary.interval=10s"
       - "release.canary.affinity=cookie"
-      - "release.health_check_timeout=30s"
-      - "release.traefik.config_dir=/shared/traefik-config"
+      - "release.health_check_timeout=20s"
+      - "release.angie.container=angie"
+      - "release.angie.config_dir=/shared/angie-config"
       - "release.healthcheck.path=/"
       - "release.healthcheck.interval=5s"
       - "release.healthcheck.timeout=3s"
@@ -84,11 +85,12 @@ services:
         condition: service_started
     labels:
       - "release.enable=true"
-      - "release.provider=traefik"
+      - "release.provider=angie"
       - "release.strategy=blue-green"
       - "release.bg.soak_time=30s"
-      - "release.health_check_timeout=30s"
-      - "release.traefik.config_dir=/shared/traefik-config"
+      - "release.health_check_timeout=20s"
+      - "release.angie.container=angie"
+      - "release.angie.config_dir=/shared/angie-config"
       - "release.healthcheck.path=/"
       - "release.healthcheck.interval=5s"
       - "release.healthcheck.timeout=3s"
@@ -96,4 +98,4 @@ services:
       - "release.healthcheck.start_period=10s"
 
 volumes:
-  traefik-dynamic:
+  angie-config:

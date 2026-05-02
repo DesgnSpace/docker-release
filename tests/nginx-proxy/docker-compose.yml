@@ -14,7 +14,9 @@ services:
       - "8080:80"
     volumes:
       - /var/run/docker.sock:/tmp/docker.sock:ro
-      - nginx-tmpl:/app/nginx.tmpl:ro
+      - nginx-tmpl:/app/custom:ro
+    environment:
+      - NGINX_TMPL=/app/custom/nginx.tmpl
     depends_on:
       docker-release:
         condition: service_started

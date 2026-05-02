@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -441,7 +440,12 @@ func (c *Controller) WaitDeployments() {
 func (c *Controller) scaleUp(ctx context.Context, existing []types.Container) ([]types.Container, error) {
 	log.Printf("scaling up: creating %d container(s) from image", len(existing))
 
-	maxNum := maxContainerNumber(existing)
+	var project, service string
+	if len(existing) > 0 {
+		project = existing[0].Labels["com.docker.compose.project"]
+		service = existing[0].Labels["com.docker.compose.service"]
+	}
+	maxNum := c.docker.MaxServiceContainerNumber(ctx, project, service)
 
 	var newIDs []string
 	for i, ctr := range existing {
@@ -473,16 +477,6 @@ func (c *Controller) scaleUp(ctx context.Context, existing []types.Container) ([
 	}
 
 	return newContainers, nil
-}
-
-func maxContainerNumber(containers []types.Container) int {
-	max := 0
-	for _, ctr := range containers {
-		if n, err := strconv.Atoi(ctr.Labels["com.docker.compose.container.number"]); err == nil && n > max {
-			max = n
-		}
-	}
-	return max
 }
 
 func splitByImage(containers []types.Container, images map[string][]types.Container) (old, new []types.Container) {
