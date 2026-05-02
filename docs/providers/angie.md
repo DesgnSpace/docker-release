@@ -1,8 +1,8 @@
-# Nginx Provider
+# Angie Provider
 
-Use this when your app runs behind Nginx.
+Use this when your app runs behind Angie.
 
-`docker-release` writes upstream files to a shared volume, then reloads Nginx.
+`docker-release` writes upstream files to a shared volume, then reloads Angie.
 
 ## Compose Example
 
@@ -13,24 +13,24 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - docker-release-state:/var/lib/docker-release
-      - nginx-config:/shared/nginx-config:rw
+      - angie-config:/shared/angie-config:rw
 
-  nginx:
-    image: nginx:alpine
+  angie:
+    image: docker.angie.software/angie:latest
     ports:
       - "80:80"
     volumes:
-      - nginx-config:/etc/nginx/conf.d/custom:ro
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - angie-config:/etc/angie/http.d/custom:ro
+      - ./angie.conf:/etc/angie/http.d/default.conf:ro
 
   app:
     image: your-registry/app:latest
     labels:
       release.enable: "true"
-      release.provider: nginx
+      release.provider: angie
       release.strategy: linear
-      release.nginx.service: nginx
-      release.nginx.config_dir: /shared/nginx-config
+      release.angie.service: angie
+      release.angie.config_dir: /shared/angie-config
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost/health"]
       interval: 10s
@@ -39,13 +39,13 @@ services:
 
 volumes:
   docker-release-state:
-  nginx-config:
+  angie-config:
 ```
 
-## Nginx Config
+## Angie Config
 
 ```nginx
-include /etc/nginx/conf.d/custom/*.conf;
+include /etc/angie/http.d/custom/*.conf;
 
 server {
     listen 80;
@@ -65,9 +65,9 @@ server {
 
 ```yaml
 release.enable: "true"
-release.provider: nginx
-release.nginx.service: nginx
-release.nginx.config_dir: /shared/nginx-config
+release.provider: angie
+release.angie.service: angie
+release.angie.config_dir: /shared/angie-config
 ```
 
 ## Deploy
@@ -79,9 +79,8 @@ docker release app
 
 ## Notes
 
-- `release.nginx.service` is the Compose service name for Nginx.
-- If you do not set it, `docker-release` tries to find a running Nginx container in the same Compose project.
-- Nginx open source uses `ip_hash` for sticky traffic. It does not set sticky cookies.
+- Angie uses `http.d` in many images, not `conf.d`.
+- Cookie affinity uses a generated cookie name like `_srr_a172cedcae`.
 
 ## Strategy Examples
 
@@ -114,10 +113,8 @@ release.affinity: ip
 
 ## Multiple Apps
 
-Add one `location` per app. Each app gets its own upstream name.
-
 ```nginx
-include /etc/nginx/conf.d/custom/*.conf;
+include /etc/angie/http.d/custom/*.conf;
 
 server {
     listen 80;
@@ -132,19 +129,10 @@ server {
 }
 ```
 
-`api` labels:
-
-```yaml
-release.enable: "true"
-release.provider: nginx
-release.nginx.service: nginx
-release.nginx.config_dir: /shared/nginx-config
-```
-
 ## Common Problems
 
 | Problem | Fix |
 |---|---|
-| Nginx does not see new servers | Check `include /etc/nginx/conf.d/custom/*.conf;`. |
-| Reload does not run | Set `release.nginx.service` to your Nginx Compose service name. |
-| Rollback state is lost | Mount `/var/lib/docker-release` to a volume. |
+| Angie cannot find generated files | Check the mount path. Many Angie images use `/etc/angie/http.d`. |
+| Reload does not run | Set `release.angie.service` to your Angie Compose service name. |
+| Sticky sessions do not work | Use `release.affinity: cookie`. |

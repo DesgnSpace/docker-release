@@ -1,78 +1,22 @@
-# docker-release
+# docker-release Docs
 
-Zero-downtime deployment controller for Docker Compose. Runs as a sidecar, watches your services, and orchestrates rolling updates, blue/green, and canary releases — without Kubernetes.
+Use `docker-release` to deploy Docker Compose services without planned downtime.
 
----
+This page gives the short version. Provider guides hold the full setup examples.
 
-## How it works
+## Pick a Provider
 
-`docker-release` sits in your Compose stack and talks to the Docker socket. When you trigger a deploy, it:
+| Provider | Use it when | Guide |
+|---|---|---|
+| `nginx` | You use Nginx. | [Nginx](./providers/nginx.md) |
+| `angie` | You use Angie. | [Angie](./providers/angie.md) |
+| `caddy` | You use Caddy. | [Caddy](./providers/caddy.md) |
+| `haproxy` | You use HAProxy. | [HAProxy](./providers/haproxy.md) |
+| `traefik` | You use Traefik. | [Traefik](./providers/traefik.md) |
+| `nginx-proxy` | You use `nginxproxy/nginx-proxy`. | [nginx-proxy](./providers/nginx-proxy.md) |
+| `none` | You deploy workers or jobs. | [No proxy](./providers/none.md) |
 
-1. Starts new containers on the updated image
-2. Waits for them to pass health checks
-3. Shifts traffic via your reverse proxy config
-4. Drains and removes old containers
-
-It never proxies traffic itself — it writes config to a shared volume that your proxy (Nginx, Angie, Traefik) hot-reloads.
-
----
-
-## Quick start
-
-Add to your `docker-compose.yml`:
-
-```yaml
-services:
-  docker-release:
-    image: your-registry/docker-release:latest
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - proxy-config:/shared/proxy-config:rw
-    restart: unless-stopped
-
-  app:
-    image: your-registry/app:latest
-    labels:
-      release.enable: "true"
-      release.provider: nginx
-      release.strategy: linear
-      release.nginx.service: nginx
-      release.nginx.config_dir: /shared/proxy-config
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-```
-
-Install the CLI plugin once, then deploy:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/desgnspace/docker-release/main/scripts/docker-release \
-  | sudo tee ~/.docker/cli-plugins/docker-release >/dev/null \
-  && sudo chmod +x ~/.docker/cli-plugins/docker-release
-
-docker compose up -d
-docker release app
-```
-
----
-
-## Daily workflow
-
-```sh
-docker release app           # deploy
-docker release app --force   # deploy, override an in-progress one
-docker release rollback app  # roll back to the previous deployment
-docker release status        # show state of all managed services
-docker release status app    # show state of one service
-```
-
----
-
-## CLI plugin install
-
-One-line install from the repo — no clone needed:
+## Install CLI
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/desgnspace/docker-release/main/scripts/docker-release \
@@ -80,188 +24,99 @@ curl -fsSL https://raw.githubusercontent.com/desgnspace/docker-release/main/scri
   && sudo chmod +x ~/.docker/cli-plugins/docker-release
 ```
 
-The plugin auto-detects the active Compose project from your current directory — it works across all your stacks from a single install.
-
-For contributors working in this repo:
+## Commands
 
 ```sh
-make dev   # symlinks scripts/docker-release → ~/.docker/cli-plugins/docker-release
+docker release app           # deploy app
+docker release app --force   # deploy even if one is running
+docker release status        # show all services
+docker release status app    # show one service
+docker release rollback app  # roll back app
 ```
 
----
+If a service name is also a command, use the long form:
 
-## Deployment strategies
+```sh
+docker release release status
+```
 
-### Linear (default)
+## Deploy Flow
 
-Replaces containers one at a time. Each old container is drained and removed only after the replacement is healthy.
+1. Start new containers.
+2. Wait for health checks.
+3. Add new containers to the proxy.
+4. Drain old containers.
+5. Stop old containers.
+
+## Strategies
+
+### Linear
+
+Replaces containers one by one.
 
 ```yaml
 release.strategy: linear
-release.drain_timeout: 10s
-release.health_check_timeout: 60s
 ```
 
 ### Blue/Green
 
-Spins up a full replacement set, waits for all to be healthy, then cuts over all traffic at once. Holds the old set during a soak period for instant rollback.
+Starts a full new set, moves traffic, then keeps the old set for rollback.
 
 ```yaml
 release.strategy: blue-green
 release.bg.soak_time: 5m
 release.bg.green_weight: 50
-release.bg.affinity: ip
+release.affinity: ip
 ```
 
 ### Canary
 
-Routes a configurable percentage of traffic to the new version and gradually increases it. Rolls back automatically if the canary becomes unhealthy.
+Sends some traffic to the new version, then sends more over time.
 
 ```yaml
 release.strategy: canary
 release.canary.start_percentage: 10
 release.canary.step: 20
 release.canary.interval: 2m
-release.canary.affinity: ip    # ip | cookie
+release.affinity: ip
 ```
 
----
+## Common Labels
 
-## Providers
-
-| Provider | Status | Notes |
+| Label | Default | Use |
 |---|---|---|
-| `nginx` | stable | Writes upstream conf to shared volume; reloads Nginx. [Details](./providers/nginx.md) |
-| `angie` | stable | Same mechanism as Nginx for the Angie fork. |
-| `traefik` | draft | Generates dynamic YAML via Traefik file provider. |
-| `nginx-proxy` | draft | Writes `nginx.tmpl` for jwilder/nginx-proxy. |
-| `none` | stable | Orchestration only — no proxy config written. |
+| `release.enable` | — | Set to `true` to manage this service. |
+| `release.provider` | `nginx-proxy` | Proxy provider. |
+| `release.strategy` | `linear` | Deploy style. |
+| `release.health_check_timeout` | `60s` | Max wait for a healthy container. |
+| `release.drain_timeout` | `10s` | Wait time before old containers stop. |
+| `release.upstream` | service name | Custom upstream name. |
+| `release.affinity` | `cookie` | Session affinity: `cookie`, `ip`, or empty. |
 
-All providers follow the same pattern: mount a shared config volume to both `docker-release` and your proxy, label your app services, and pick a strategy.
+## Provider Labels
 
----
-
-## Label reference
-
-### Required
-
-| Label | Description |
+| Label | Use |
 |---|---|
-| `release.enable` | Set `true` to manage this service |
-| `release.provider` | `nginx` \| `angie` \| `traefik` \| `nginx-proxy` \| `none` |
+| `release.nginx.service` | Nginx Compose service name. |
+| `release.nginx.config_dir` | Shared Nginx config path. |
+| `release.angie.service` | Angie Compose service name. |
+| `release.angie.config_dir` | Shared Angie config path. |
+| `release.caddy.service` | Caddy Compose service name. |
+| `release.caddy.config_dir` | Shared Caddy config path. |
+| `release.caddy.path` | URL path for Caddy, such as `/app`. |
+| `release.haproxy.service` | HAProxy Compose service name. |
+| `release.haproxy.config_dir` | Shared HAProxy config path. |
+| `release.traefik.config_dir` | Shared Traefik config path. |
 
-### Deployment
+## Health Checks
 
-| Label | Default | Description |
-|---|---|---|
-| `release.strategy` | `linear` | `linear` \| `blue-green` \| `canary` |
-| `release.health_check_timeout` | `60s` | Max wait for container to become healthy |
-| `release.drain_timeout` | `10s` | Wait after removing from upstream before stopping |
-| `release.upstream` | _(service name)_ | Override the upstream block name |
+Add a Docker `healthcheck` to each app service. `docker-release` waits for `healthy` before it sends traffic to a new container.
 
-### Health checks
+## State
 
-Use Docker-native `healthcheck:` on app services. `docker-release` waits for Docker's `healthy` status and listens for Docker health events from the socket.
-
-### Nginx / Angie
-
-| Label | Description |
-|---|---|
-| `release.nginx.service` | Nginx service name (for reload signal) |
-| `release.nginx.config_dir` | Shared config volume path inside docker-release |
-| `release.angie.service` | Angie service name |
-| `release.angie.config_dir` | Shared config volume path inside docker-release |
-
-### Blue/Green
-
-| Label | Default | Description |
-|---|---|---|
-| `release.bg.soak_time` | `5m` | How long to hold old containers before removal |
-| `release.bg.green_weight` | `50` | Traffic percentage to green during soak |
-| `release.bg.affinity` | `ip` | Session affinity during soak: `ip` or `cookie` |
-
-### Canary
-
-| Label | Default | Description |
-|---|---|---|
-| `release.canary.start_percentage` | `10` | Initial traffic percentage to new version |
-| `release.canary.step` | `20` | Percentage increase per interval |
-| `release.canary.interval` | `2m` | Time between steps |
-| `release.canary.affinity` | `ip` | Session affinity: `ip` or `cookie` |
-
----
-
-## Full compose example
+Mount `/var/lib/docker-release` to a volume. This keeps state for rollback.
 
 ```yaml
-name: myapp
-
-services:
-  docker-release:
-    image: your-registry/docker-release:latest
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - proxy-config:/shared/proxy-config:rw
-    restart: unless-stopped
-
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-    volumes:
-      - proxy-config:/etc/nginx/conf.d/custom:ro
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-
-  app:
-    image: your-registry/app:latest
-    deploy:
-      replicas: 2
-    labels:
-      release.enable: "true"
-      release.provider: nginx
-      release.strategy: linear
-      release.nginx.service: nginx
-      release.nginx.config_dir: /shared/proxy-config
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-
 volumes:
-  proxy-config:
+  - docker-release-state:/var/lib/docker-release
 ```
-
-Base `nginx.conf`:
-
-```nginx
-server {
-    listen 80;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-
-    location / {
-        proxy_pass http://app_upstream/;
-    }
-}
-```
-
----
-
-## Rollback
-
-`docker-release` persists deployment state to `/var/lib/docker-release`. Rolling back restores traffic to the previous container set and removes the new ones.
-
-```sh
-docker release rollback app
-```
-
-Rollback is also triggered automatically when a canary container fails health checks during a deployment.
-
----
-
-## Notes
-
-- Service names that match a reserved command word (`watch`, `status`, `rollback`, etc.) must use the explicit form: `docker release release <service>`.
-- `watch` is the default container command — started by Compose, not manually.
-- The Docker socket mount (`/var/run/docker.sock`) is required for the controller to manage containers.
