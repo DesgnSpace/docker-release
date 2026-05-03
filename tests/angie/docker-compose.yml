@@ -27,8 +27,8 @@ services:
       - "release.enable=true"
       - "release.provider=angie"
       - "release.strategy=linear"
-      - "release.health_check_timeout=20s"
-      - "release.drain_timeout=5s"
+      - "release.health_check_timeout=5s"
+      - "release.drain_timeout=30s"
 
   canary_app:
     image: traefik/whoami

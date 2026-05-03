@@ -1,3 +1,6 @@
+
+import /etc/caddy/conf.d/*.caddy
+
 :80 {
     header -Server
     header -X-Powered-By
@@ -5,5 +8,28 @@
 
     encode gzip zstd
 
-    import /etc/caddy/conf.d/*.caddy
+    handle /linear/* {
+        header X-App linear
+        header X-Frame-Options DENY
+        header X-Content-Type-Options nosniff
+        import linear_app_upstream
+    }
+
+    handle /canary/* {
+        header X-App canary
+        header X-Frame-Options DENY
+        header X-Content-Type-Options nosniff
+        import canary_app_upstream
+    }
+
+    handle /bluegreen/* {
+        header X-App bluegreen
+        header X-Frame-Options DENY
+        header X-Content-Type-Options nosniff
+        import blue_green_app_upstream
+    }
+
+    redir / /linear/ {
+        status 302
+    }
 }

@@ -85,7 +85,6 @@ release.provider: caddy
 |---|---|---|
 | `release.caddy.service` | auto-detected by image | multiple Caddy containers in the project |
 | `release.caddy.config_dir` | `/shared/caddy-config` | shared volume mounted at a different path |
-| `release.caddy.path` | empty | path mode for one app under a path, such as `/app` |
 
 ## Deploy
 
@@ -96,8 +95,7 @@ docker release app
 
 ## Notes
 
-- No `release.caddy.path` means whole-site mode. Import `<service>_upstream` inside your own Caddy site block.
-- Set `release.caddy.path` only when one domain serves many apps by path, such as `/app` and `/api`.
+- `docker-release` always writes a named snippet. Import it inside your Caddy site block wherever you need it.
 - Cookie affinity uses a generated cookie name like `_srr_a172cedcae`.
 
 ## Strategy Examples
@@ -130,21 +128,23 @@ release.bg.green_weight: 50
 
 ## Path Mode (Optional)
 
-Use path mode only when one Caddy site serves more than one app by URL path.
+Use `handle_path` in your Caddyfile to route by URL path. `docker-release` always writes a named snippet — you control where and how it is used.
 
-Route `/app/*` to `app`:
+Route `/app/*` to `app` (Caddy strips the prefix before forwarding):
 
-```yaml
-release.caddy.path: /app
+```caddy
+handle_path /app/* {
+    import app_upstream
+}
 ```
 
 Route `/api/*` to `api`:
 
-```yaml
-release.caddy.path: /api
+```caddy
+handle_path /api/* {
+    import api_upstream
+}
 ```
-
-Caddy receives `/app/users`, then sends `/users` to the app.
 
 ## Add Static Routes
 

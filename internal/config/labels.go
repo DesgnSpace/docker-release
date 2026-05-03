@@ -46,7 +46,6 @@ type ServiceConfig struct {
 	TraefikConfigDir   string
 	CaddyService       string
 	CaddyConfigDir     string
-	CaddyPath          string
 	CaddyKeepalive     int
 	HAProxyService     string
 	HAProxyConfigDir   string
@@ -88,7 +87,6 @@ func ParseLabels(labels map[string]string) (*ServiceConfig, error) {
 		TraefikConfigDir:   getOr(labels, "release.traefik.config_dir", ""),
 		CaddyService:       getOr(labels, "release.caddy.service", ""),
 		CaddyConfigDir:     getOr(labels, "release.caddy.config_dir", ""),
-		CaddyPath:          getOr(labels, "release.caddy.path", ""),
 		CaddyKeepalive:     parseIntOr(labels, "release.caddy.keepalive", -1),
 		HAProxyService:     getOr(labels, "release.haproxy.service", ""),
 		HAProxyConfigDir:   getOr(labels, "release.haproxy.config_dir", ""),

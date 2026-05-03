@@ -124,12 +124,6 @@ func (l *Linear) Execute(ctx context.Context, d *Deployment) error {
 		return fmt.Errorf("reloading final deployment config: %w", err)
 	}
 
-	select {
-	case <-time.After(d.Config.DrainTimeout):
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-
 	stableUpstream := l.buildFinalUpstream(d, "")
 	applyNginxKeepalive(d, stableUpstream)
 	if err := l.provider.GenerateConfig(stableUpstream); err != nil {

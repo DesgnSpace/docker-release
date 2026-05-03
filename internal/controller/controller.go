@@ -307,14 +307,120 @@ func (c *Controller) deploy(parentCtx context.Context, serviceName string, cfg *
 	if err := strat.Execute(deployCtx, d); err != nil {
 		log.Printf("deployment failed for %s: %v", serviceName, err)
 
-		log.Printf("initiating rollback for %s", serviceName)
-		if rbErr := strat.Rollback(ctx, d); rbErr != nil {
+		rollbackCtx, rollbackCancel := context.WithTimeout(context.Background(), cfg.HealthCheckTimeout+cfg.DrainTimeout+30*time.Second)
+		defer rollbackCancel()
+
+		log.Printf("initiating abort rollback for %s", serviceName)
+		if rbErr := c.abortDeployment(rollbackCtx, serviceName, cfg, prov, d); rbErr != nil {
 			log.Printf("rollback failed for %s: %v", serviceName, rbErr)
 		}
 		return
 	}
 
 	log.Printf("deployment complete for %s", serviceName)
+}
+
+func (c *Controller) abortDeployment(ctx context.Context, serviceName string, cfg *config.ServiceConfig, prov provider.Provider, d *strategy.Deployment) error {
+	targets, err := c.abortTargets(ctx, serviceName, d)
+	if err != nil {
+		return err
+	}
+	if len(targets) == 0 {
+		return fmt.Errorf("no live rollback targets for %s", serviceName)
+	}
+
+	upstream := &provider.UpstreamState{
+		Service:      serviceName,
+		UpstreamName: d.UpstreamName(),
+		Affinity:     cfg.Affinity,
+	}
+
+	for _, target := range targets {
+		upstream.Servers = append(upstream.Servers, provider.Server{Addr: target.Addr})
+	}
+	applyProviderKeepalive(cfg, upstream)
+
+	if err := prov.GenerateConfig(upstream); err != nil {
+		return fmt.Errorf("generating abort rollback config: %w", err)
+	}
+
+	if err := prov.Reload(); err != nil {
+		return fmt.Errorf("reloading abort rollback config: %w", err)
+	}
+
+	select {
+	case <-time.After(cfg.DrainTimeout):
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
+	targetIDs := make(map[string]bool, len(targets))
+	for _, target := range targets {
+		targetIDs[target.ID] = true
+	}
+
+	for _, newContainer := range d.New {
+		if targetIDs[newContainer.ID] {
+			continue
+		}
+
+		if err := c.docker.Stop(ctx, newContainer.ID, 10); err != nil {
+			log.Printf("abort rollback warning: stop %s: %v", newContainer.ID[:12], err)
+		}
+
+		if err := c.docker.Remove(ctx, newContainer.ID); err != nil {
+			log.Printf("abort rollback warning: remove %s: %v", newContainer.ID[:12], err)
+		}
+	}
+
+	return c.stateManager.Save(&state.DeploymentState{
+		Service:    serviceName,
+		Status:     state.StatusIdle,
+		Strategy:   string(cfg.Strategy),
+		Containers: state.Containers{Stable: containerInfoIDs(targets)},
+	})
+}
+
+func (c *Controller) abortTargets(ctx context.Context, serviceName string, d *strategy.Deployment) ([]strategy.ContainerInfo, error) {
+	containersByID := make(map[string]strategy.ContainerInfo, len(d.Old)+len(d.New))
+	for _, info := range d.Old {
+		containersByID[info.ID] = info
+	}
+	for _, info := range d.New {
+		containersByID[info.ID] = info
+	}
+
+	ds, err := c.stateManager.Load(serviceName)
+	if err != nil {
+		return nil, fmt.Errorf("loading abort state: %w", err)
+	}
+
+	ids := ds.Containers.Stable
+	if len(ids) == 0 {
+		ids = containerInfoIDs(d.Old)
+	}
+
+	targets := make([]strategy.ContainerInfo, 0, len(ids))
+	for _, id := range ids {
+		info, ok := containersByID[id]
+		if !ok {
+			continue
+		}
+		if _, err := c.docker.Inspect(ctx, info.ID); err != nil {
+			continue
+		}
+		targets = append(targets, info)
+	}
+
+	return targets, nil
+}
+
+func containerInfoIDs(containers []strategy.ContainerInfo) []string {
+	ids := make([]string, len(containers))
+	for i, container := range containers {
+		ids[i] = container.ID
+	}
+	return ids
 }
 
 func (c *Controller) resolveNginxProxyUpstream(ctx context.Context, cfg *config.ServiceConfig, containers []types.Container) {
@@ -345,7 +451,7 @@ func (c *Controller) createProvider(cfg *config.ServiceConfig, serviceName strin
 	case config.ProviderNginxProxy:
 		return c.getNginxProxyProvider(cfg)
 	case config.ProviderCaddy:
-		return provider.NewCaddy(cfg.CaddyConfigDir, c.docker, cfg.CaddyService, cfg.CaddyPath, c.project)
+		return provider.NewCaddy(cfg.CaddyConfigDir, c.docker, cfg.CaddyService, c.project)
 	case config.ProviderHAProxy:
 		return provider.NewHAProxy(cfg.HAProxyConfigDir, c.docker, cfg.HAProxyService, c.project)
 	case config.ProviderNone:
@@ -464,10 +570,10 @@ func (c *Controller) Release(ctx context.Context, service string, force bool) er
 		return fmt.Errorf("no managed containers found for service %q", service)
 	}
 
-	images := groupByImageID(serviceContainers)
+	revisions := groupByRevision(serviceContainers)
 
-	if len(images) >= 2 {
-		oldContainers, newContainers := splitByImage(serviceContainers, images)
+	if len(revisions) >= 2 {
+		oldContainers, newContainers := splitByRevision(serviceContainers, revisions)
 		cfg, err := config.ParseLabels(newContainers[0].Labels)
 		if err != nil {
 			return fmt.Errorf("parsing labels: %w", err)
@@ -552,18 +658,18 @@ func (c *Controller) scaleUp(ctx context.Context, existing []types.Container) ([
 	return newContainers, nil
 }
 
-func splitByImage(containers []types.Container, images map[string][]types.Container) (old, new []types.Container) {
+func splitByRevision(containers []types.Container, revisions map[string][]types.Container) (old, new []types.Container) {
 	var newestTime int64
-	var newestImage string
+	var newestRevision string
 	for _, ctr := range containers {
 		if ctr.Created > newestTime {
 			newestTime = ctr.Created
-			newestImage = ctr.ImageID
+			newestRevision = containerRevision(ctr)
 		}
 	}
 
-	for imageID, ctrs := range images {
-		if imageID == newestImage {
+	for revision, ctrs := range revisions {
+		if revision == newestRevision {
 			new = ctrs
 		} else {
 			old = append(old, ctrs...)
@@ -640,6 +746,24 @@ func groupByImageID(containers []types.Container) map[string][]types.Container {
 	}
 
 	return grouped
+}
+
+func groupByRevision(containers []types.Container) map[string][]types.Container {
+	grouped := make(map[string][]types.Container)
+	for _, container := range containers {
+		revision := containerRevision(container)
+		grouped[revision] = append(grouped[revision], container)
+	}
+
+	return grouped
+}
+
+func containerRevision(container types.Container) string {
+	if hash := container.Labels["com.docker.compose.config-hash"]; hash != "" {
+		return "config:" + hash
+	}
+
+	return "image:" + container.ImageID
 }
 
 func separateOldAndNew(images map[string][]types.Container, newContainerID string) (oldContainers []types.Container, newContainers []types.Container) {
@@ -878,32 +1002,37 @@ func (c *Controller) cleanStaleConfigs(activeConfigs map[string]*config.ServiceC
 func (c *Controller) generateServiceConfig(ctx context.Context, name string, cfg *config.ServiceConfig, containers []types.Container, checkHealth bool) {
 	prov := c.createProvider(cfg, name)
 
-	upstream := &provider.UpstreamState{
-		Service:      name,
-		UpstreamName: cfg.UpstreamName,
+	upstream, ok := c.deploymentStateUpstream(ctx, name, cfg, containers)
+	if !ok {
+		upstream = &provider.UpstreamState{
+			Service:      name,
+			UpstreamName: cfg.UpstreamName,
+		}
 	}
 
-	for _, ctr := range containers {
-		addr, err := c.docker.ContainerAddr(ctx, ctr.ID)
-		if err != nil {
-			log.Printf("warning: resolving %s: %v", ctr.ID[:12], err)
-			continue
-		}
-
-		down := false
-		if checkHealth {
-			healthy, err := c.docker.IsHealthy(ctx, ctr.ID)
+	if !ok {
+		for _, ctr := range containers {
+			addr, err := c.docker.ContainerAddr(ctx, ctr.ID)
 			if err != nil {
-				log.Printf("warning: checking health of %s: %v", ctr.ID[:12], err)
+				log.Printf("warning: resolving %s: %v", ctr.ID[:12], err)
 				continue
 			}
-			down = !healthy
-		}
 
-		upstream.Servers = append(upstream.Servers, provider.Server{
-			Addr: addr,
-			Down: down,
-		})
+			down := false
+			if checkHealth {
+				healthy, err := c.docker.IsHealthy(ctx, ctr.ID)
+				if err != nil {
+					log.Printf("warning: checking health of %s: %v", ctr.ID[:12], err)
+					continue
+				}
+				down = !healthy
+			}
+
+			upstream.Servers = append(upstream.Servers, provider.Server{
+				Addr: addr,
+				Down: down,
+			})
+		}
 	}
 
 	if len(upstream.Servers) == 0 {
@@ -923,17 +1052,7 @@ func (c *Controller) generateServiceConfig(ctx context.Context, name string, cfg
 		}
 	}
 
-	if cfg.Provider == config.ProviderNginx || cfg.Provider == config.ProviderNginxProxy {
-		upstream.Keepalive = cfg.ResolveNginxKeepalive(len(upstream.Servers))
-	}
-
-	if cfg.Provider == config.ProviderAngie {
-		upstream.Keepalive = cfg.ResolveAngieKeepalive(len(upstream.Servers))
-	}
-
-	if cfg.Provider == config.ProviderCaddy {
-		upstream.Keepalive = cfg.ResolveCaddyKeepalive(len(upstream.Servers))
-	}
+	applyProviderKeepalive(cfg, upstream)
 
 	if err := prov.GenerateConfig(upstream); err != nil {
 		log.Printf("error generating config for %s: %v", name, err)
@@ -942,6 +1061,7 @@ func (c *Controller) generateServiceConfig(ctx context.Context, name string, cfg
 
 	if err := prov.Reload(); err != nil {
 		log.Printf("error reloading provider for %s: %v", name, err)
+		c.refreshServiceConfigAfter(ctx, name, 5*time.Second)
 		return
 	}
 
@@ -953,6 +1073,86 @@ func (c *Controller) generateServiceConfig(ctx context.Context, name string, cfg
 	}
 
 	log.Printf("generated config for %s (%d server(s), %d active)", name, len(upstream.Servers), activeCount)
+}
+
+func (c *Controller) deploymentStateUpstream(ctx context.Context, name string, cfg *config.ServiceConfig, containers []types.Container) (*provider.UpstreamState, bool) {
+	ds, err := c.stateManager.Load(name)
+	if err != nil || ds.Status != state.StatusInProgress || len(ds.Containers.Stable) == 0 || len(ds.Containers.Canary) == 0 {
+		return nil, false
+	}
+
+	weight := ds.CurrentWeight
+	if weight <= 0 {
+		switch ds.Strategy {
+		case "canary":
+			weight = cfg.Canary.StartPercentage
+		case "blue-green":
+			weight = cfg.BlueGreen.GreenWeight
+		default:
+			return nil, false
+		}
+	}
+
+	if weight <= 0 || weight > 100 {
+		return nil, false
+	}
+
+	containersByID := make(map[string]types.Container, len(containers))
+	for _, ctr := range containers {
+		containersByID[ctr.ID] = ctr
+	}
+
+	upstream := &provider.UpstreamState{
+		Service:      name,
+		UpstreamName: cfg.UpstreamName,
+		Affinity:     cfg.Affinity,
+	}
+
+	stableWeight := 100 - weight
+	c.addWeightedServers(ctx, upstream, containersByID, ds.Containers.Stable, stableWeight, "stable")
+	c.addWeightedServers(ctx, upstream, containersByID, ds.Containers.Canary, weight, "canary")
+
+	if len(upstream.Servers) == 0 {
+		return nil, false
+	}
+
+	applyProviderKeepalive(cfg, upstream)
+	return upstream, true
+}
+
+func (c *Controller) addWeightedServers(ctx context.Context, upstream *provider.UpstreamState, containersByID map[string]types.Container, ids []string, weight int, group string) {
+	for _, id := range ids {
+		ctr, ok := containersByID[id]
+		if !ok {
+			continue
+		}
+
+		addr, err := c.docker.ContainerAddr(ctx, ctr.ID)
+		if err != nil {
+			log.Printf("warning: resolving %s: %v", ctr.ID[:12], err)
+			continue
+		}
+
+		upstream.Servers = append(upstream.Servers, provider.Server{
+			Addr:   addr,
+			Weight: weight,
+			Group:  group,
+		})
+	}
+}
+
+func applyProviderKeepalive(cfg *config.ServiceConfig, upstream *provider.UpstreamState) {
+	if cfg.Provider == config.ProviderNginx || cfg.Provider == config.ProviderNginxProxy {
+		upstream.Keepalive = cfg.ResolveNginxKeepalive(len(upstream.Servers))
+	}
+
+	if cfg.Provider == config.ProviderAngie {
+		upstream.Keepalive = cfg.ResolveAngieKeepalive(len(upstream.Servers))
+	}
+
+	if cfg.Provider == config.ProviderCaddy {
+		upstream.Keepalive = cfg.ResolveCaddyKeepalive(len(upstream.Servers))
+	}
 }
 
 func (c *Controller) refreshServiceConfig(ctx context.Context, serviceName string) {
@@ -969,8 +1169,7 @@ func (c *Controller) refreshServiceConfig(ctx context.Context, serviceName strin
 		return
 	}
 
-	imageCount := countImageIDs(serviceContainers)
-	if c.shouldSkipRefresh(serviceName, imageCount) {
+	if c.shouldSkipRefresh(serviceName) {
 		return
 	}
 
@@ -1032,8 +1231,7 @@ func (c *Controller) refreshAllConfigs(ctx context.Context) {
 	c.cleanStaleConfigs(activeConfigs)
 
 	for name, cfg := range activeConfigs {
-		imageCount := countImageIDs(services[name])
-		if c.shouldSkipRefresh(name, imageCount) {
+		if c.shouldSkipRefresh(name) {
 			continue
 		}
 		c.resolveNginxProxyUpstream(ctx, cfg, services[name])
@@ -1041,7 +1239,7 @@ func (c *Controller) refreshAllConfigs(ctx context.Context) {
 	}
 }
 
-func (c *Controller) shouldSkipRefresh(serviceName string, imageCount int) bool {
+func (c *Controller) shouldSkipRefresh(serviceName string) bool {
 	c.mu.Lock()
 	_, deploying := c.deployments[serviceName]
 	c.mu.Unlock()
@@ -1052,26 +1250,11 @@ func (c *Controller) shouldSkipRefresh(serviceName string, imageCount int) bool 
 
 	ds, err := c.stateManager.Load(serviceName)
 	if err == nil && ds.Status == state.StatusInProgress && !ds.IsStale(state.DefaultStaleThreshold) {
-		if ds.Strategy == "canary" {
-			log.Printf("canary deployment in progress for %s (from another process), skipping config refresh", serviceName)
-			return true
-		}
-
-		if imageCount > 1 {
-			log.Printf("deployment in progress for %s (from another process), skipping config refresh", serviceName)
-			return true
-		}
+		log.Printf("deployment in progress for %s (from another process), skipping config refresh", serviceName)
+		return true
 	}
 
 	return false
-}
-
-func countImageIDs(containers []types.Container) int {
-	imageIDs := make(map[string]bool)
-	for _, container := range containers {
-		imageIDs[container.ImageID] = true
-	}
-	return len(imageIDs)
 }
 
 func (c *Controller) handleHealthStatus(ctx context.Context, containerID string, attrs map[string]string) {
