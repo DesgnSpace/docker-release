@@ -101,9 +101,11 @@ func renderHAProxyBackend(state *UpstreamState) string {
 
 		if s.Down {
 			fmt.Fprintf(&b, " disabled")
+		} else if s.Backup {
+			fmt.Fprintf(&b, " backup")
 		}
 
-		if useCookie {
+		if useCookie && !s.Backup {
 			fmt.Fprintf(&b, " cookie s%d", i+1)
 		}
 

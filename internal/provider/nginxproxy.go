@@ -243,10 +243,16 @@ func renderNginxProxyUpstream(state *UpstreamState) string {
 	}
 
 	for _, s := range state.Servers {
+		if s.Backup && !supportsNginxBackup(state.Affinity) {
+			continue
+		}
+
 		fmt.Fprintf(&b, "    server %s", s.Addr)
 
 		if s.Down {
 			b.WriteString(" down")
+		} else if s.Backup {
+			b.WriteString(" backup")
 		} else if s.Weight > 0 {
 			fmt.Fprintf(&b, " weight=%d", s.Weight)
 		}

@@ -161,6 +161,69 @@ func TestAngieRenderUpstreamKeepalive(t *testing.T) {
 	}
 }
 
+func TestAngieRenderUpstreamBackupNoAffinity(t *testing.T) {
+	state := &UpstreamState{
+		Service:  "app",
+		Affinity: "",
+		Servers: []Server{
+			{Addr: "172.18.0.10:80"},
+			{Addr: "172.18.0.2:80", Backup: true},
+		},
+	}
+
+	got := renderAngieUpstream(state)
+
+	if !strings.Contains(got, "server 172.18.0.10:80;") {
+		t.Error("missing primary server")
+	}
+	if !strings.Contains(got, "server 172.18.0.2:80 backup;") {
+		t.Error("missing backup server")
+	}
+}
+
+func TestAngieRenderUpstreamBackupWithCookieAffinity(t *testing.T) {
+	state := &UpstreamState{
+		Service:  "app",
+		Affinity: "cookie",
+		Servers: []Server{
+			{Addr: "172.18.0.10:80"},
+			{Addr: "172.18.0.2:80", Backup: true},
+		},
+	}
+
+	got := renderAngieUpstream(state)
+
+	if !strings.Contains(got, "sticky cookie") {
+		t.Error("missing sticky cookie directive")
+	}
+	if !strings.Contains(got, "server 172.18.0.10:80;") {
+		t.Error("missing primary server")
+	}
+	if !strings.Contains(got, "server 172.18.0.2:80 backup;") {
+		t.Error("backup server should be emitted with angie cookie affinity (real sticky, not ip_hash)")
+	}
+}
+
+func TestAngieRenderUpstreamBackupSkippedWithIpAffinity(t *testing.T) {
+	state := &UpstreamState{
+		Service:  "app",
+		Affinity: "ip",
+		Servers: []Server{
+			{Addr: "172.18.0.10:80"},
+			{Addr: "172.18.0.2:80", Backup: true},
+		},
+	}
+
+	got := renderAngieUpstream(state)
+
+	if strings.Contains(got, "172.18.0.2:80") {
+		t.Error("backup server should be omitted when affinity=ip (ip_hash forbids backup)")
+	}
+	if !strings.Contains(got, "172.18.0.10:80") {
+		t.Error("primary server should still be present")
+	}
+}
+
 func TestAngieGenerateConfigWritesFile(t *testing.T) {
 	dir := t.TempDir()
 	p := NewAngie(dir, nil, "", "")
@@ -199,3 +262,4 @@ func TestAngieGenerateConfigWritesFile(t *testing.T) {
 		t.Error("temp file not cleaned up")
 	}
 }
+

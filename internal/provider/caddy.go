@@ -19,6 +19,10 @@ type CaddyProvider struct {
 }
 
 func NewCaddy(configDir string, dockerClient *docker.Client, serviceName, path, project string) *CaddyProvider {
+	if configDir == "" {
+		configDir = "/shared/caddy-config"
+	}
+
 	return &CaddyProvider{
 		configDir:   configDir,
 		docker:      dockerClient,
@@ -89,7 +93,7 @@ func renderCaddyUpstream(state *UpstreamState, path string) string {
 
 	var active []Server
 	for _, s := range state.Servers {
-		if !s.Down {
+		if !s.Down && !s.Backup {
 			active = append(active, s)
 		}
 	}
@@ -135,6 +139,7 @@ func renderCaddyUpstream(state *UpstreamState, path string) string {
 	}
 
 	fmt.Fprintf(&b, "    }\n")
+
 	fmt.Fprintf(&b, "}\n")
 
 	return b.String()

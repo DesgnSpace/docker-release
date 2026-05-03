@@ -200,3 +200,34 @@ func TestCaddyGenerateConfigWritesFile(t *testing.T) {
 		t.Error("temp file not cleaned up")
 	}
 }
+
+func TestNewCaddyDefaultsConfigDir(t *testing.T) {
+	p := NewCaddy("", nil, "", "", "")
+
+	if p.configDir != "/shared/caddy-config" {
+		t.Errorf("configDir = %q, want /shared/caddy-config", p.configDir)
+	}
+}
+
+func TestCaddyBackupServersDropped(t *testing.T) {
+	state := &UpstreamState{
+		Service: "app",
+		Servers: []Server{
+			{Addr: "172.18.0.10:80"},
+			{Addr: "172.18.0.2:80", Backup: true},
+			{Addr: "172.18.0.3:80", Backup: true},
+		},
+	}
+
+	got := renderCaddyUpstream(state, "")
+
+	if !strings.Contains(got, "172.18.0.10:80") {
+		t.Error("missing primary server")
+	}
+	if strings.Contains(got, "172.18.0.2:80") {
+		t.Error("backup server should be silently dropped for caddy")
+	}
+	if strings.Contains(got, "172.18.0.3:80") {
+		t.Error("backup server should be silently dropped for caddy")
+	}
+}

@@ -50,8 +50,9 @@ func TestBlueGreenExecute(t *testing.T) {
 		t.Errorf("expected 2 health checks, got %d", len(docker.healthyCalls))
 	}
 
-	if len(prov.configs) != 2 {
-		t.Fatalf("expected 2 config generations (weighted soak + final), got %d", len(prov.configs))
+	// cutover (weighted) + final-with-backup + post-drain = 3 configs
+	if len(prov.configs) != 3 {
+		t.Fatalf("expected 3 config generations (weighted soak + final-with-backup + post-drain), got %d", len(prov.configs))
 	}
 
 	soak := prov.configs[0]
@@ -71,19 +72,48 @@ func TestBlueGreenExecute(t *testing.T) {
 		}
 	}
 
+	// final config: 2 green primary + 2 blue backup
 	final := prov.configs[1]
-	if len(final.Servers) != 2 {
-		t.Errorf("expected 2 servers in final config (green only), got %d", len(final.Servers))
+	if len(final.Servers) != 4 {
+		t.Errorf("expected 4 servers in final config (green primary + blue backup), got %d", len(final.Servers))
+	}
+	primaryCount, backupCount := 0, 0
+	for _, s := range final.Servers {
+		if s.Backup {
+			backupCount++
+			if !strings.HasPrefix(s.Addr, "172.18.0.2") && !strings.HasPrefix(s.Addr, "172.18.0.3") {
+				t.Errorf("backup server should be blue, got %s", s.Addr)
+			}
+		} else {
+			primaryCount++
+			if !strings.Contains(s.Addr, "172.18.0.1") {
+				t.Errorf("primary server should be green, got %s", s.Addr)
+			}
+		}
+	}
+	if primaryCount != 2 {
+		t.Errorf("expected 2 primary (green) servers, got %d", primaryCount)
+	}
+	if backupCount != 2 {
+		t.Errorf("expected 2 backup (blue) servers, got %d", backupCount)
 	}
 
-	for _, s := range final.Servers {
+	// post-drain config: green only, no backup
+	postDrain := prov.configs[2]
+	if len(postDrain.Servers) != 2 {
+		t.Errorf("expected 2 servers in post-drain config (green only), got %d", len(postDrain.Servers))
+	}
+	for _, s := range postDrain.Servers {
+		if s.Backup {
+			t.Errorf("post-drain config should not have backup servers")
+		}
 		if !strings.Contains(s.Addr, "172.18.0.1") {
-			t.Errorf("final config should only have green servers, got %s", s.Addr)
+			t.Errorf("post-drain config should only have green servers, got %s", s.Addr)
 		}
 	}
 
-	if prov.reloads != 2 {
-		t.Errorf("expected 2 reloads, got %d", prov.reloads)
+	if prov.reloads != 3 {
+		t.Errorf("expected 3 reloads, got %d", prov.reloads)
 	}
 
 	if len(docker.stopCalls) != 2 {

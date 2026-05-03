@@ -110,13 +110,19 @@ func TestCanaryWeightProgression(t *testing.T) {
 		}
 	}
 
+	// final config: 1 new primary + 2 old backup
 	finalCfg := prov.configs[3]
-	if len(finalCfg.Servers) != 1 {
-		t.Errorf("final config should have 1 server (canary only), got %d", len(finalCfg.Servers))
+	if len(finalCfg.Servers) != 3 {
+		t.Errorf("final config should have 3 servers (1 canary primary + 2 stable backup), got %d", len(finalCfg.Servers))
 	}
 
-	if finalCfg.Servers[0].Weight != 0 {
-		t.Errorf("final config should have no weight (equal distribution), got %d", finalCfg.Servers[0].Weight)
+	for _, s := range finalCfg.Servers {
+		if !s.Backup && s.Weight != 0 {
+			t.Errorf("primary in final config should have no weight, got %d", s.Weight)
+		}
+		if !s.Backup && s.Addr != "172.18.0.10:80" {
+			t.Errorf("primary in final config should be canary server, got %s", s.Addr)
+		}
 	}
 }
 

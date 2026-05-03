@@ -145,7 +145,7 @@ All provider labels are optional. Defaults work for standard single-proxy setups
 | `release.angie.config_dir` | `/shared/angie-config` | Shared Angie config path. |
 | `release.caddy.service` | auto-detected by image | Caddy Compose service name. |
 | `release.caddy.config_dir` | `/shared/caddy-config` | Shared Caddy config path. |
-| `release.caddy.path` | `/<service-name>` | URL path for Caddy. |
+| `release.caddy.path` | empty | Optional path mode for Caddy, such as `/app`. Leave empty for a whole site. |
 | `release.haproxy.service` | auto-detected by image | HAProxy Compose service name. |
 | `release.haproxy.config_dir` | `/shared/haproxy-config` | Shared HAProxy config path. |
 | `release.traefik.config_dir` | `/shared/traefik-config` | Shared Traefik config path. |

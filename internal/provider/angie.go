@@ -89,10 +89,16 @@ func renderAngieUpstream(state *UpstreamState) string {
 	}
 
 	for _, s := range state.Servers {
+		if s.Backup && !supportsAngieBackup(state.Affinity) {
+			continue
+		}
+
 		fmt.Fprintf(&b, "    server %s", s.Addr)
 
 		if s.Down {
 			fmt.Fprintf(&b, " down")
+		} else if s.Backup {
+			fmt.Fprintf(&b, " backup")
 		} else if s.Weight > 0 {
 			fmt.Fprintf(&b, " weight=%d", s.Weight)
 		}

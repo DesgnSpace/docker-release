@@ -45,8 +45,16 @@ type Server struct {
 	Addr   string // e.g. "172.18.0.5:80"
 	Weight int    // 0 means no weight directive
 	Down   bool   // marks server as draining
+	Backup bool   // fallback-only; skipped when balancer uses hash (ip_hash/hash/random)
 	Group  string // optional traffic group for weighted providers
 }
+
+// supportsNginxBackup reports whether nginx can emit the `backup` keyword.
+// nginx forbids it with ip_hash/hash/random; our renderer maps both "ip" and "cookie" → ip_hash.
+func supportsNginxBackup(affinity string) bool { return affinity == "" }
+
+// supportsAngieBackup is like supportsNginxBackup but angie's "cookie" uses sticky cookie (not hash).
+func supportsAngieBackup(affinity string) bool { return affinity == "" || affinity == "cookie" }
 
 type UpstreamState struct {
 	Service      string

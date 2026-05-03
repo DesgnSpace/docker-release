@@ -6,23 +6,21 @@ Use this when your app runs behind Caddy.
 
 ## When to Use This
 
-Use this provider when Caddy is your reverse proxy and you want `docker-release` to create `reverse_proxy` blocks for your apps.
-
-This is a good fit if your apps use path routes like `/app` or `/api`.
+Use this provider when Caddy is your reverse proxy and you want `docker-release` to keep upstream backends current while your Caddyfile owns routes, headers, auth, and other directives.
 
 ## What Gets Written
 
-For `release.caddy.path: /app`, `docker-release` writes a file like this:
+By default, `docker-release` writes a named snippet:
 
 ```caddy
-handle_path /app* {
+(app_upstream) {
     reverse_proxy 172.18.0.4:80 172.18.0.5:80 {
         lb_policy cookie _srr_a172cedcae
     }
 }
 ```
 
-`handle_path` removes `/app` before the request reaches your app.
+Import the generated file globally, then use the snippet inside your site block.
 
 ## Compose Example
 
@@ -59,12 +57,20 @@ volumes:
 
 ## Caddyfile
 
+Most sites proxy the whole domain to one app. Use this first.
+
 ```caddy
-:80 {
+import /etc/caddy/conf.d/*.caddy
+
+example.com {
     encode gzip zstd
-    import /etc/caddy/conf.d/*.caddy
+    header X-Frame-Options DENY
+
+    import app_upstream
 }
 ```
+
+For local testing, replace `example.com` with `:80`.
 
 ## Required Labels
 
@@ -79,7 +85,7 @@ release.provider: caddy
 |---|---|---|
 | `release.caddy.service` | auto-detected by image | multiple Caddy containers in the project |
 | `release.caddy.config_dir` | `/shared/caddy-config` | shared volume mounted at a different path |
-| `release.caddy.path` | `/<service-name>` | URL path differs from the service name; set to empty for named-snippet mode |
+| `release.caddy.path` | empty | path mode for one app under a path, such as `/app` |
 
 ## Deploy
 
@@ -90,8 +96,8 @@ docker release app
 
 ## Notes
 
-- `release.caddy.path` sets the URL path, such as `/app`.
-- Caddy removes that path before the request reaches your app.
+- No `release.caddy.path` means whole-site mode. Import `<service>_upstream` inside your own Caddy site block.
+- Set `release.caddy.path` only when one domain serves many apps by path, such as `/app` and `/api`.
 - Cookie affinity uses a generated cookie name like `_srr_a172cedcae`.
 
 ## Strategy Examples
@@ -122,7 +128,9 @@ release.bg.soak_time: 5m
 release.bg.green_weight: 50
 ```
 
-## Path Examples
+## Path Mode (Optional)
+
+Use path mode only when one Caddy site serves more than one app by URL path.
 
 Route `/app/*` to `app`:
 
@@ -140,20 +148,26 @@ Caddy receives `/app/users`, then sends `/users` to the app.
 
 ## Add Static Routes
 
-Keep your own routes in `Caddyfile`. Put the import after shared config.
+Keep your own routes in `Caddyfile`. Put generated snippet imports at the top level, then use the named upstream as the fallback app route.
 
 ```caddy
-:80 {
-    encode gzip zstd
+import /etc/caddy/conf.d/*.caddy
 
-    respond /ping 200
+example.com {
+    encode gzip zstd
 
     handle /static/* {
         root * /srv/www
         file_server
     }
 
-    import /etc/caddy/conf.d/*.caddy
+    handle /health {
+        respond 200
+    }
+
+    handle {
+        import app_upstream
+    }
 }
 ```
 
@@ -162,5 +176,5 @@ Keep your own routes in `Caddyfile`. Put the import after shared config.
 | Problem | Fix |
 |---|---|
 | Caddy does not route to the app | Check `import /etc/caddy/conf.d/*.caddy`. |
-| App receives the wrong path | Check `release.caddy.path`. |
+| App receives the wrong path | Remove `release.caddy.path` for whole-site routing, or check the path value. |
 | Reload does not run | Set `release.caddy.service` to your Caddy Compose service name. |

@@ -82,7 +82,7 @@ func renderLoadBalancerService(b *strings.Builder, state *UpstreamState) {
 
 	b.WriteString("        servers:\n")
 	for _, s := range state.Servers {
-		if s.Down {
+		if s.Down || s.Backup {
 			continue
 		}
 		fmt.Fprintf(b, "          - url: \"http://%s\"\n", s.Addr)
@@ -108,7 +108,7 @@ func renderWeightedService(b *strings.Builder, state *UpstreamState) {
 	canaryWeight := -1
 
 	for _, s := range state.Servers {
-		if s.Down {
+		if s.Down || s.Backup {
 			continue
 		}
 

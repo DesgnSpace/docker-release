@@ -100,6 +100,9 @@ func (c *Canary) Execute(ctx context.Context, d *Deployment) error {
 	for _, cn := range d.New {
 		finalUpstream.Servers = append(finalUpstream.Servers, provider.Server{Addr: cn.Addr})
 	}
+	for _, old := range d.Old {
+		finalUpstream.Servers = append(finalUpstream.Servers, provider.Server{Addr: old.Addr, Backup: true})
+	}
 	applyNginxKeepalive(d, finalUpstream)
 
 	if err := c.provider.GenerateConfig(finalUpstream); err != nil {

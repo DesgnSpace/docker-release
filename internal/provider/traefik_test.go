@@ -237,3 +237,23 @@ func TestTraefikReloadIsNoop(t *testing.T) {
 		t.Errorf("reload should be no-op, got: %v", err)
 	}
 }
+
+func TestTraefikBackupServersDropped(t *testing.T) {
+	state := &UpstreamState{
+		Service: "app",
+		Servers: []Server{
+			{Addr: "172.18.0.10:80"},
+			{Addr: "172.18.0.2:80", Backup: true},
+		},
+	}
+
+	got := renderTraefikYAML(state)
+
+	if !strings.Contains(got, "172.18.0.10:80") {
+		t.Error("missing primary server")
+	}
+	if strings.Contains(got, "172.18.0.2:80") {
+		t.Error("backup server should be silently dropped for traefik")
+	}
+}
+

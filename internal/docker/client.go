@@ -95,7 +95,32 @@ func (c *Client) Exec(ctx context.Context, containerID string, cmd []string) err
 		return fmt.Errorf("exec create: %w", err)
 	}
 
-	return c.api.ContainerExecStart(ctx, exec.ID, container.ExecStartOptions{})
+	if err := c.api.ContainerExecStart(ctx, exec.ID, container.ExecStartOptions{}); err != nil {
+		return fmt.Errorf("exec start: %w", err)
+	}
+
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		inspect, err := c.api.ContainerExecInspect(ctx, exec.ID)
+		if err != nil {
+			return fmt.Errorf("exec inspect: %w", err)
+		}
+
+		if !inspect.Running {
+			if inspect.ExitCode != 0 {
+				return fmt.Errorf("exec %q exited with code %d", strings.Join(cmd, " "), inspect.ExitCode)
+			}
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 func (c *Client) FindContainerByService(ctx context.Context, serviceName string) (types.Container, error) {
@@ -163,6 +188,10 @@ func (c *Client) findContainerByImage(ctx context.Context, project, keyword stri
 
 	kw := strings.ToLower(keyword)
 	for _, ctr := range containers {
+		if ctr.Labels["org.opencontainers.image.title"] == "docker-release" {
+			continue
+		}
+
 		if strings.Contains(strings.ToLower(ctr.Image), kw) {
 			return ctr, nil
 		}

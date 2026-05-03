@@ -345,11 +345,7 @@ func (c *Controller) createProvider(cfg *config.ServiceConfig, serviceName strin
 	case config.ProviderNginxProxy:
 		return c.getNginxProxyProvider(cfg)
 	case config.ProviderCaddy:
-		path := cfg.CaddyPath
-		if path == "" {
-			path = "/" + serviceName
-		}
-		return provider.NewCaddy(cfg.CaddyConfigDir, c.docker, cfg.CaddyService, path, c.project)
+		return provider.NewCaddy(cfg.CaddyConfigDir, c.docker, cfg.CaddyService, cfg.CaddyPath, c.project)
 	case config.ProviderHAProxy:
 		return provider.NewHAProxy(cfg.HAProxyConfigDir, c.docker, cfg.HAProxyService, c.project)
 	case config.ProviderNone:

@@ -312,3 +312,46 @@ func TestExtractUpstreamBlock(t *testing.T) {
 		t.Error("block should end with end")
 	}
 }
+
+func TestNginxProxyBackupNoAffinity(t *testing.T) {
+	state := &UpstreamState{
+		Service:  "app",
+		Affinity: "",
+		Servers: []Server{
+			{Addr: "172.18.0.10:80"},
+			{Addr: "172.18.0.2:80", Backup: true},
+		},
+	}
+
+	got := renderNginxProxyUpstream(state)
+
+	if !strings.Contains(got, "server 172.18.0.10:80;") {
+		t.Error("missing primary server")
+	}
+	if !strings.Contains(got, "server 172.18.0.2:80 backup;") {
+		t.Error("missing backup server")
+	}
+}
+
+func TestNginxProxyBackupSkippedWithIpHash(t *testing.T) {
+	for _, affinity := range []string{"ip", "cookie"} {
+		state := &UpstreamState{
+			Service:  "app",
+			Affinity: affinity,
+			Servers: []Server{
+				{Addr: "172.18.0.10:80"},
+				{Addr: "172.18.0.2:80", Backup: true},
+			},
+		}
+
+		got := renderNginxProxyUpstream(state)
+
+		if strings.Contains(got, "172.18.0.2:80") {
+			t.Errorf("affinity=%s: backup server should be omitted with ip_hash", affinity)
+		}
+		if !strings.Contains(got, "172.18.0.10:80") {
+			t.Errorf("affinity=%s: primary server should still be present", affinity)
+		}
+	}
+}
+

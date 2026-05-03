@@ -1,18 +1,27 @@
 VERSION ?= $(shell v=$$(git tag --points-at HEAD 2>/dev/null | head -1); echo $${v:-dev})
 IMAGE   ?= malico/docker-release
 
-.PHONY: dev dev-remove test build publish buildx-builder up-nginx up-angie up-traefik up-nginx-proxy down-nginx down-angie down-traefik down-nginx-proxy
+.PHONY: dev dev-remove test build publish tag buildx-builder \
+	up-nginx up-angie up-traefik up-nginx-proxy up-caddy up-haproxy \
+	down-nginx down-angie down-traefik down-nginx-proxy down-caddy down-haproxy
 
 build: buildx-builder
 	docker buildx build \
+		--builder docker-release-builder \
 		--platform linux/amd64,linux/arm64 \
 		--build-arg VERSION=$(VERSION) \
 		-t $(IMAGE):$(VERSION) \
 		-t $(IMAGE):latest \
 		.
 
-publish: buildx-builder
+tag:
+	@test "$(VERSION)" != "dev" || (echo "ERROR: set VERSION=x.y.z"; exit 1)
+	git tag -a v$(VERSION) -m "Release v$(VERSION)"
+	git push origin v$(VERSION)
+
+publish: tag buildx-builder
 	docker buildx build \
+		--builder docker-release-builder \
 		--platform linux/amd64,linux/arm64 \
 		--build-arg VERSION=$(VERSION) \
 		-t $(IMAGE):$(VERSION) \
@@ -50,6 +59,12 @@ up-traefik:
 up-nginx-proxy:
 	docker compose -f tests/nginx-proxy/docker-compose.yml up --build
 
+up-caddy:
+	docker compose -f tests/caddy/docker-compose.yml up --build
+
+up-haproxy:
+	docker compose -f tests/haproxy/docker-compose.yml up --build
+
 down-nginx:
 	docker compose -f tests/nginx/docker-compose.yml down -v
 
@@ -61,3 +76,9 @@ down-traefik:
 
 down-nginx-proxy:
 	docker compose -f tests/nginx-proxy/docker-compose.yml down -v
+
+down-caddy:
+	docker compose -f tests/caddy/docker-compose.yml down -v
+
+down-haproxy:
+	docker compose -f tests/haproxy/docker-compose.yml down -v

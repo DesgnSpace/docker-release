@@ -85,6 +85,9 @@ func (bg *BlueGreen) Execute(ctx context.Context, d *Deployment) error {
 	for _, c := range d.New {
 		finalUpstream.Servers = append(finalUpstream.Servers, provider.Server{Addr: c.Addr})
 	}
+	for _, c := range d.Old {
+		finalUpstream.Servers = append(finalUpstream.Servers, provider.Server{Addr: c.Addr, Backup: true})
+	}
 	applyNginxKeepalive(d, finalUpstream)
 
 	if err := bg.provider.GenerateConfig(finalUpstream); err != nil {
@@ -101,6 +104,20 @@ func (bg *BlueGreen) Execute(ctx context.Context, d *Deployment) error {
 	case <-time.After(d.Config.DrainTimeout):
 	case <-ctx.Done():
 		return ctx.Err()
+	}
+
+	postDrainUpstream := &provider.UpstreamState{Service: d.Service, UpstreamName: d.UpstreamName()}
+	for _, c := range d.New {
+		postDrainUpstream.Servers = append(postDrainUpstream.Servers, provider.Server{Addr: c.Addr})
+	}
+	applyNginxKeepalive(d, postDrainUpstream)
+
+	if err := bg.provider.GenerateConfig(postDrainUpstream); err != nil {
+		return fmt.Errorf("generating post-drain config: %w", err)
+	}
+
+	if err := bg.provider.Reload(); err != nil {
+		return fmt.Errorf("reloading post-drain: %w", err)
 	}
 
 	log.Printf("[blue-green] tearing down blue containers")

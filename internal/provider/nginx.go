@@ -67,7 +67,7 @@ func (p *NginxProvider) Reload() error {
 		return p.docker.Start(ctx, ctr.ID)
 	}
 
-	return p.docker.Exec(ctx, ctr.ID, []string{"nginx", "-s", "reload"})
+	return p.docker.Exec(ctx, ctr.ID, []string{"/usr/sbin/nginx", "-s", "reload"})
 }
 
 func renderUpstream(state *UpstreamState) string {
@@ -83,10 +83,16 @@ func renderUpstream(state *UpstreamState) string {
 	}
 
 	for _, s := range state.Servers {
+		if s.Backup && !supportsNginxBackup(state.Affinity) {
+			continue
+		}
+
 		fmt.Fprintf(&b, "    server %s", s.Addr)
 
 		if s.Down {
 			fmt.Fprintf(&b, " down")
+		} else if s.Backup {
+			fmt.Fprintf(&b, " backup")
 		} else if s.Weight > 0 {
 			fmt.Fprintf(&b, " weight=%d", s.Weight)
 		}
