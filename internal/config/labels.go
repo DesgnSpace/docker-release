@@ -40,9 +40,10 @@ type ServiceConfig struct {
 	NginxService       string
 	NginxConfigDir     string
 	NginxKeepalive     int
-	AngieService       string
-	AngieConfigDir     string
-	AngieKeepalive     int
+	AngieService         string
+	AngieConfigDir       string
+	AngieKeepalive       int
+	AngieStickyLearnName string
 	TraefikConfigDir   string
 	CaddyService       string
 	CaddyConfigDir     string
@@ -81,9 +82,10 @@ func ParseLabels(labels map[string]string) (*ServiceConfig, error) {
 		NginxService:       getOr(labels, "release.nginx.service", ""),
 		NginxConfigDir:     getOr(labels, "release.nginx.config_dir", ""),
 		NginxKeepalive:     parseIntOr(labels, "release.nginx.keepalive", -1),
-		AngieService:       getOr(labels, "release.angie.service", ""),
-		AngieConfigDir:     getOr(labels, "release.angie.config_dir", ""),
-		AngieKeepalive:     parseIntOr(labels, "release.angie.keepalive", -1),
+		AngieService:         getOr(labels, "release.angie.service", ""),
+		AngieConfigDir:       getOr(labels, "release.angie.config_dir", ""),
+		AngieKeepalive:       parseIntOr(labels, "release.angie.keepalive", -1),
+		AngieStickyLearnName: getOr(labels, "release.angie.sticky.learn.name", ""),
 		TraefikConfigDir:   getOr(labels, "release.traefik.config_dir", ""),
 		CaddyService:       getOr(labels, "release.caddy.service", ""),
 		CaddyConfigDir:     getOr(labels, "release.caddy.config_dir", ""),

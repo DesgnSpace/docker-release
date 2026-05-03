@@ -81,7 +81,13 @@ func renderAngieUpstream(state *UpstreamState) string {
 
 	switch state.Affinity {
 	case "cookie":
-		fmt.Fprintf(&b, "    sticky cookie %s path=/;\n", stickyCookieName(state))
+		if state.StickyLearnName != "" {
+			zone := state.ResolveUpstreamName() + "_sessions"
+			fmt.Fprintf(&b, "    sticky learn create=$upstream_cookie_%s lookup=$cookie_%s zone=%s:1m;\n",
+				state.StickyLearnName, state.StickyLearnName, zone)
+		} else {
+			fmt.Fprintf(&b, "    sticky cookie %s path=/;\n", stickyCookieName(state))
+		}
 	case "ip":
 		fmt.Fprintf(&b, "    ip_hash;\n")
 	default:

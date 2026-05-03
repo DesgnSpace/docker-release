@@ -1148,6 +1148,7 @@ func applyProviderKeepalive(cfg *config.ServiceConfig, upstream *provider.Upstre
 
 	if cfg.Provider == config.ProviderAngie {
 		upstream.Keepalive = cfg.ResolveAngieKeepalive(len(upstream.Servers))
+		upstream.StickyLearnName = cfg.AngieStickyLearnName
 	}
 
 	if cfg.Provider == config.ProviderCaddy {

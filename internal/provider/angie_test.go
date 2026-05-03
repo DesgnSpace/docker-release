@@ -263,3 +263,30 @@ func TestAngieGenerateConfigWritesFile(t *testing.T) {
 	}
 }
 
+func TestAngieRenderUpstreamStickyLearn(t *testing.T) {
+	state := &UpstreamState{
+		Service:         "app",
+		Affinity:        "cookie",
+		StickyLearnName: "sessionid",
+		Servers:         []Server{{Addr: "172.18.0.5:80"}},
+	}
+
+	got := renderAngieUpstream(state)
+
+	if !strings.Contains(got, "sticky learn") {
+		t.Error("missing sticky learn directive")
+	}
+	if !strings.Contains(got, "create=$upstream_cookie_sessionid") {
+		t.Error("missing create param")
+	}
+	if !strings.Contains(got, "lookup=$cookie_sessionid") {
+		t.Error("missing lookup param")
+	}
+	if !strings.Contains(got, "zone=app_sessions:1m") {
+		t.Error("missing zone")
+	}
+	if strings.Contains(got, "sticky cookie") {
+		t.Error("should not use sticky cookie when learn name is set")
+	}
+}
+
