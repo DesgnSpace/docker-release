@@ -47,8 +47,6 @@ services:
     labels:
       release.enable: "true"
       release.provider: angie
-      release.angie.service: angie
-      release.angie.config_dir: /shared/angie-config
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost/health"]
       interval: 10s
@@ -83,18 +81,14 @@ server {
 ```yaml
 release.enable: "true"
 release.provider: angie
-release.angie.service: angie
-release.angie.config_dir: /shared/angie-config
 ```
 
-## What Each Label Means
+## Optional Overrides
 
-| Label | Meaning |
-|---|---|
-| `release.enable` | Allows `docker-release` to manage this app. |
-| `release.provider` | Selects the Angie provider. |
-| `release.angie.service` | Name of the Angie Compose service to reload. |
-| `release.angie.config_dir` | Path where `docker-release` writes generated files. |
+| Label | Default | Override when |
+|---|---|---|
+| `release.angie.service` | auto-detected by image | multiple Angie containers in the project |
+| `release.angie.config_dir` | `/shared/angie-config` | shared volume mounted at a different path |
 
 ## Deploy
 
@@ -134,7 +128,6 @@ release.affinity: cookie
 release.strategy: blue-green
 release.bg.soak_time: 5m
 release.bg.green_weight: 50
-release.affinity: ip
 ```
 
 ## Multiple Apps

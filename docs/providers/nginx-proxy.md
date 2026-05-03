@@ -45,7 +45,6 @@ services:
     labels:
       release.enable: "true"
       release.provider: nginx-proxy
-      release.nginx.config_dir: /shared/nginx-tmpl
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost/health"]
       interval: 10s
@@ -61,16 +60,13 @@ volumes:
 ```yaml
 release.enable: "true"
 release.provider: nginx-proxy
-release.nginx.config_dir: /shared/nginx-tmpl
 ```
 
-## What Each Label Means
+## Optional Overrides
 
-| Label | Meaning |
-|---|---|
-| `release.enable` | Allows `docker-release` to manage this app. |
-| `release.provider` | Selects the nginx-proxy provider. |
-| `release.nginx.config_dir` | Folder where `docker-release` writes `nginx.tmpl`. |
+| Label | Default | Override when |
+|---|---|---|
+| `release.nginx.config_dir` | `/shared/nginx-tmpl` | shared volume mounted at a different path |
 
 ## What Each Environment Variable Means
 
@@ -129,7 +125,6 @@ release.affinity: cookie
 release.strategy: blue-green
 release.bg.soak_time: 5m
 release.bg.green_weight: 50
-release.affinity: ip
 ```
 
 ## Host Example
@@ -171,4 +166,4 @@ api:
 |---|---|
 | Route does not appear | Check `VIRTUAL_HOST`. |
 | Path routing fails | Include the trailing slash in `VIRTUAL_PATH`, such as `/app/`. |
-| Template is not updated | Check `release.nginx.config_dir` points to the shared template volume. |
+| Template is not updated | Check `release.nginx.config_dir` override matches the shared template volume mount. |

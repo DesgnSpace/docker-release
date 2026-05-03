@@ -86,8 +86,8 @@ func TestParseLabelsDefaults(t *testing.T) {
 	if cfg.BlueGreen.GreenWeight != 50 {
 		t.Errorf("default green_weight = %d, want 50", cfg.BlueGreen.GreenWeight)
 	}
-	if cfg.Affinity != "cookie" {
-		t.Errorf("default affinity = %s, want cookie", cfg.Affinity)
+	if cfg.Affinity != "ip" {
+		t.Errorf("default affinity = %s, want ip", cfg.Affinity)
 	}
 	if cfg.Canary.Step != 20 {
 		t.Errorf("default step = %d, want 20", cfg.Canary.Step)
@@ -97,6 +97,55 @@ func TestParseLabelsDefaults(t *testing.T) {
 	}
 	if cfg.NginxKeepalive != -1 {
 		t.Errorf("default nginx_keepalive = %d, want -1", cfg.NginxKeepalive)
+	}
+	if cfg.NginxConfigDir != "/shared/nginx-tmpl" {
+		t.Errorf("default nginx_config_dir (nginx-proxy) = %s, want /shared/nginx-tmpl", cfg.NginxConfigDir)
+	}
+}
+
+func TestProviderDefaults(t *testing.T) {
+	cases := []struct {
+		provider  string
+		wantField func(*ServiceConfig) string
+		wantValue string
+	}{
+		{"nginx", func(c *ServiceConfig) string { return c.NginxConfigDir }, "/shared/nginx-config"},
+		{"nginx-proxy", func(c *ServiceConfig) string { return c.NginxConfigDir }, "/shared/nginx-tmpl"},
+		{"angie", func(c *ServiceConfig) string { return c.AngieConfigDir }, "/shared/angie-config"},
+		{"caddy", func(c *ServiceConfig) string { return c.CaddyConfigDir }, "/shared/caddy-config"},
+		{"traefik", func(c *ServiceConfig) string { return c.TraefikConfigDir }, "/shared/traefik-config"},
+		{"haproxy", func(c *ServiceConfig) string { return c.HAProxyConfigDir }, "/shared/haproxy-config"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.provider, func(t *testing.T) {
+			labels := map[string]string{
+				"release.enable":   "true",
+				"release.provider": tc.provider,
+			}
+			cfg, err := ParseLabels(labels)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got := tc.wantField(cfg); got != tc.wantValue {
+				t.Errorf("config_dir = %s, want %s", got, tc.wantValue)
+			}
+		})
+	}
+}
+
+func TestProviderDefaultsNotOverridden(t *testing.T) {
+	labels := map[string]string{
+		"release.enable":           "true",
+		"release.provider":         "caddy",
+		"release.caddy.config_dir": "/custom/caddy-config",
+	}
+	cfg, err := ParseLabels(labels)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.CaddyConfigDir != "/custom/caddy-config" {
+		t.Errorf("config_dir = %s, want /custom/caddy-config", cfg.CaddyConfigDir)
 	}
 }
 

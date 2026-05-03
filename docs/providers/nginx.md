@@ -47,8 +47,6 @@ services:
     labels:
       release.enable: "true"
       release.provider: nginx
-      release.nginx.service: nginx
-      release.nginx.config_dir: /shared/nginx-config
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost/health"]
       interval: 10s
@@ -83,18 +81,14 @@ server {
 ```yaml
 release.enable: "true"
 release.provider: nginx
-release.nginx.service: nginx
-release.nginx.config_dir: /shared/nginx-config
 ```
 
-## What Each Label Means
+## Optional Overrides
 
-| Label | Meaning |
-|---|---|
-| `release.enable` | Allows `docker-release` to manage this app. |
-| `release.provider` | Selects the Nginx provider. |
-| `release.nginx.service` | Name of the Nginx Compose service to reload. |
-| `release.nginx.config_dir` | Path where `docker-release` writes generated files. |
+| Label | Default | Override when |
+|---|---|---|
+| `release.nginx.service` | auto-detected by image | multiple Nginx containers in the project |
+| `release.nginx.config_dir` | `/shared/nginx-config` | shared volume mounted at a different path |
 
 ## Deploy
 
@@ -135,7 +129,6 @@ release.affinity: cookie
 release.strategy: blue-green
 release.bg.soak_time: 5m
 release.bg.green_weight: 50
-release.affinity: ip
 ```
 
 ## Multiple Apps
@@ -163,8 +156,6 @@ server {
 ```yaml
 release.enable: "true"
 release.provider: nginx
-release.nginx.service: nginx
-release.nginx.config_dir: /shared/nginx-config
 ```
 
 ## Common Problems

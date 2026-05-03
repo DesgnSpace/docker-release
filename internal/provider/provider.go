@@ -1,11 +1,15 @@
 package provider
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/docker/docker/api/types"
+	"github.com/malico/docker-release/internal/docker"
 )
 
 var validName = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
@@ -48,7 +52,7 @@ type UpstreamState struct {
 	Service      string
 	UpstreamName string // overrides Service for upstream naming (e.g. VIRTUAL_HOST for nginx-proxy)
 	Servers      []Server
-	Affinity     string // "cookie" (default), "ip", or "" (disabled)
+	Affinity     string // "ip" (default), "cookie", or "" (disabled)
 	// cookie: nginx→ip_hash (OSS has no sticky), angie/caddy/traefik/haproxy→sticky cookie
 	// ip: nginx/angie/nginx-proxy→ip_hash, traefik→hrw, caddy→ip_hash, haproxy→source
 	Keepalive int // 0 disables keepalive
@@ -64,4 +68,26 @@ func (u *UpstreamState) ResolveUpstreamName() string {
 type Provider interface {
 	GenerateConfig(state *UpstreamState) error
 	Reload() error
+}
+
+// resolveProxyContainer finds the proxy container, trying running containers first.
+// If not running, falls back to any state (stopped/exited) so the caller can start it.
+func resolveProxyContainer(ctx context.Context, d *docker.Client, project, serviceName, imageKeyword string) (ctr types.Container, running bool, err error) {
+	if serviceName != "" {
+		ctr, err = d.FindContainerByServiceInProject(ctx, project, serviceName)
+		if err == nil {
+			return ctr, true, nil
+		}
+		ctr, err = d.FindAnyContainerByServiceInProject(ctx, project, serviceName)
+	} else {
+		ctr, err = d.FindContainerByImage(ctx, project, imageKeyword)
+		if err == nil {
+			return ctr, true, nil
+		}
+		ctr, err = d.FindAnyContainerByImage(ctx, project, imageKeyword)
+	}
+	if err != nil {
+		return types.Container{}, false, err
+	}
+	return ctr, false, nil
 }

@@ -48,8 +48,6 @@ services:
     labels:
       release.enable: "true"
       release.provider: haproxy
-      release.haproxy.service: haproxy
-      release.haproxy.config_dir: /shared/haproxy-config
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost/health"]
       interval: 10s
@@ -86,18 +84,14 @@ frontend http
 ```yaml
 release.enable: "true"
 release.provider: haproxy
-release.haproxy.service: haproxy
-release.haproxy.config_dir: /shared/haproxy-config
 ```
 
-## What Each Label Means
+## Optional Overrides
 
-| Label | Meaning |
-|---|---|
-| `release.enable` | Allows `docker-release` to manage this app. |
-| `release.provider` | Selects the HAProxy provider. |
-| `release.haproxy.service` | Name of the HAProxy Compose service to reload. |
-| `release.haproxy.config_dir` | Path where `docker-release` writes generated files. |
+| Label | Default | Override when |
+|---|---|---|
+| `release.haproxy.service` | auto-detected by image | multiple HAProxy containers in the project |
+| `release.haproxy.config_dir` | `/shared/haproxy-config` | shared volume mounted at a different path |
 
 ## Deploy
 
@@ -137,7 +131,6 @@ release.affinity: cookie
 release.strategy: blue-green
 release.bg.soak_time: 5m
 release.bg.green_weight: 50
-release.affinity: ip
 ```
 
 ## Multiple Apps

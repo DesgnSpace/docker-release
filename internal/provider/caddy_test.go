@@ -167,7 +167,7 @@ func TestCaddyRenderUpstreamWithPath(t *testing.T) {
 
 func TestCaddyGenerateConfigWritesFile(t *testing.T) {
 	dir := t.TempDir()
-	p := NewCaddy(dir, nil, "", "")
+	p := NewCaddy(dir, nil, "", "", "")
 
 	state := &UpstreamState{
 		Service: "webapp",

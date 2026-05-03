@@ -14,13 +14,15 @@ type HAProxyProvider struct {
 	configDir   string
 	docker      *docker.Client
 	serviceName string
+	project     string
 }
 
-func NewHAProxy(configDir string, dockerClient *docker.Client, serviceName string) *HAProxyProvider {
+func NewHAProxy(configDir string, dockerClient *docker.Client, serviceName, project string) *HAProxyProvider {
 	return &HAProxyProvider{
 		configDir:   configDir,
 		docker:      dockerClient,
 		serviceName: serviceName,
+		project:     project,
 	}
 }
 
@@ -50,19 +52,19 @@ func (p *HAProxyProvider) GenerateConfig(state *UpstreamState) error {
 }
 
 func (p *HAProxyProvider) Reload() error {
-	if p.serviceName == "" {
-		return nil
-	}
-
 	ctx := context.Background()
 
-	ctr, err := p.docker.FindContainerByService(ctx, p.serviceName)
+	ctr, running, err := resolveProxyContainer(ctx, p.docker, p.project, p.serviceName, "haproxy")
 	if err != nil {
-		return fmt.Errorf("resolving haproxy container %q: %w", p.serviceName, err)
+		return fmt.Errorf("resolving haproxy container: %w", err)
 	}
 
 	if !matchesImage(ctr.Image, "haproxy", "alpine") {
-		return fmt.Errorf("container %q has unexpected image %q (want haproxy or alpine-based)", p.serviceName, ctr.Image)
+		return fmt.Errorf("container %q has unexpected image %q (want haproxy or alpine-based)", ctr.ID[:12], ctr.Image)
+	}
+
+	if !running {
+		return p.docker.Start(ctx, ctr.ID)
 	}
 
 	return p.docker.Exec(ctx, ctr.ID, []string{"sh", "-c", "kill -USR2 1"})

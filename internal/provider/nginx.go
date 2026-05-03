@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/docker/docker/api/types"
 	"github.com/malico/docker-release/internal/docker"
 )
 
@@ -55,7 +54,7 @@ func (p *NginxProvider) GenerateConfig(state *UpstreamState) error {
 func (p *NginxProvider) Reload() error {
 	ctx := context.Background()
 
-	ctr, err := p.resolveNginxContainer(ctx)
+	ctr, running, err := resolveProxyContainer(ctx, p.docker, p.project, p.serviceName, "nginx")
 	if err != nil {
 		return fmt.Errorf("resolving nginx container: %w", err)
 	}
@@ -64,15 +63,11 @@ func (p *NginxProvider) Reload() error {
 		return fmt.Errorf("container %q has unexpected image %q (want nginx or alpine-based)", ctr.ID[:12], ctr.Image)
 	}
 
-	return p.docker.Exec(ctx, ctr.ID, []string{"nginx", "-s", "reload"})
-}
-
-func (p *NginxProvider) resolveNginxContainer(ctx context.Context) (types.Container, error) {
-	if p.serviceName != "" {
-		return p.docker.FindContainerByServiceInProject(ctx, p.project, p.serviceName)
+	if !running {
+		return p.docker.Start(ctx, ctr.ID)
 	}
 
-	return p.docker.FindContainerByImage(ctx, p.project, "nginx")
+	return p.docker.Exec(ctx, ctr.ID, []string{"nginx", "-s", "reload"})
 }
 
 func renderUpstream(state *UpstreamState) string {

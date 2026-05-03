@@ -56,7 +56,6 @@ services:
     labels:
       release.enable: "true"
       release.provider: traefik
-      release.traefik.config_dir: /shared/traefik-config
       traefik.enable: "true"
       traefik.http.routers.app.rule: "PathPrefix(`/app`)"
       traefik.http.routers.app.service: "app@file"
@@ -77,18 +76,14 @@ volumes:
 ```yaml
 release.enable: "true"
 release.provider: traefik
-release.traefik.config_dir: /shared/traefik-config
 traefik.http.routers.app.service: "app@file"
 ```
 
-## What Each Label Means
+## Optional Overrides
 
-| Label | Meaning |
-|---|---|
-| `release.enable` | Allows `docker-release` to manage this app. |
-| `release.provider` | Selects the Traefik provider. |
-| `release.traefik.config_dir` | Path where `docker-release` writes dynamic YAML. |
-| `traefik.http.routers.app.service` | Must use `app@file`, so Traefik reads the generated service. |
+| Label | Default | Override when |
+|---|---|---|
+| `release.traefik.config_dir` | `/shared/traefik-config` | shared volume mounted at a different path |
 
 ## Deploy
 
@@ -129,7 +124,6 @@ release.affinity: cookie
 release.strategy: blue-green
 release.bg.soak_time: 5m
 release.bg.green_weight: 50
-release.affinity: ip
 ```
 
 ## Path Routing Example

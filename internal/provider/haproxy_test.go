@@ -151,7 +151,7 @@ func TestHAProxyRenderBackendHTTPReuse(t *testing.T) {
 
 func TestHAProxyGenerateConfigWritesFile(t *testing.T) {
 	dir := t.TempDir()
-	p := NewHAProxy(dir, nil, "")
+	p := NewHAProxy(dir, nil, "", "")
 
 	state := &UpstreamState{
 		Service: "webapp",

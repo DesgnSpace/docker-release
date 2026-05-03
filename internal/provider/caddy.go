@@ -14,15 +14,17 @@ type CaddyProvider struct {
 	configDir   string
 	docker      *docker.Client
 	serviceName string
-	path        string // optional: generate handle_path block instead of named snippet
+	path        string
+	project     string
 }
 
-func NewCaddy(configDir string, dockerClient *docker.Client, serviceName, path string) *CaddyProvider {
+func NewCaddy(configDir string, dockerClient *docker.Client, serviceName, path, project string) *CaddyProvider {
 	return &CaddyProvider{
 		configDir:   configDir,
 		docker:      dockerClient,
 		serviceName: serviceName,
 		path:        path,
+		project:     project,
 	}
 }
 
@@ -52,19 +54,19 @@ func (p *CaddyProvider) GenerateConfig(state *UpstreamState) error {
 }
 
 func (p *CaddyProvider) Reload() error {
-	if p.serviceName == "" {
-		return nil
-	}
-
 	ctx := context.Background()
 
-	ctr, err := p.docker.FindContainerByService(ctx, p.serviceName)
+	ctr, running, err := resolveProxyContainer(ctx, p.docker, p.project, p.serviceName, "caddy")
 	if err != nil {
-		return fmt.Errorf("resolving caddy container %q: %w", p.serviceName, err)
+		return fmt.Errorf("resolving caddy container: %w", err)
 	}
 
 	if !matchesImage(ctr.Image, "caddy", "alpine") {
-		return fmt.Errorf("container %q has unexpected image %q (want caddy or alpine-based)", p.serviceName, ctr.Image)
+		return fmt.Errorf("container %q has unexpected image %q (want caddy or alpine-based)", ctr.ID[:12], ctr.Image)
+	}
+
+	if !running {
+		return p.docker.Start(ctx, ctr.ID)
 	}
 
 	return p.docker.Exec(ctx, ctr.ID, []string{"caddy", "reload", "--config", "/etc/caddy/Caddyfile"})

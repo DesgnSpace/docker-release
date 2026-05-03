@@ -96,7 +96,6 @@ Starts a full new set, moves traffic, then keeps the old set for rollback.
 release.strategy: blue-green
 release.bg.soak_time: 5m
 release.bg.green_weight: 50
-release.affinity: ip
 ```
 
 ### Canary
@@ -108,7 +107,6 @@ release.strategy: canary
 release.canary.start_percentage: 10
 release.canary.step: 20
 release.canary.interval: 2m
-release.affinity: ip
 ```
 
 ## Common Labels
@@ -121,22 +119,36 @@ release.affinity: ip
 | `release.health_check_timeout` | `60s` | Max wait for a healthy container. |
 | `release.drain_timeout` | `10s` | Wait time before old containers stop. |
 | `release.upstream` | service name | Custom upstream name. |
-| `release.affinity` | `cookie` | Session affinity: `cookie`, `ip`, or empty. |
+| `release.affinity` | `ip` | Session affinity: `ip`, `cookie`, or empty. |
+
+## Session Affinity
+
+`release.affinity` controls how requests are pinned to a backend during a deployment. This keeps users on the same container while old and new versions run side by side.
+
+| Value | Behavior |
+|---|---|
+| `ip` (default) | Routes by client IP. All providers support this. |
+| `cookie` | Routes by sticky cookie. **Not supported by Nginx or nginx-proxy** — both fall back to IP hashing. Use `cookie` only with Angie, Caddy, HAProxy, or Traefik. |
+| `""` (empty) | No affinity. Requests are load-balanced freely. |
+
+**Nginx and nginx-proxy note:** Nginx OSS has no sticky cookie module. Setting `release.affinity: cookie` has no extra effect — both `ip` and `cookie` produce `ip_hash` in the generated upstream block. If you need real cookie-based sticky sessions, use Angie, Caddy, HAProxy, or Traefik.
 
 ## Provider Labels
 
-| Label | Use |
-|---|---|
-| `release.nginx.service` | Nginx Compose service name. |
-| `release.nginx.config_dir` | Shared Nginx config path. |
-| `release.angie.service` | Angie Compose service name. |
-| `release.angie.config_dir` | Shared Angie config path. |
-| `release.caddy.service` | Caddy Compose service name. |
-| `release.caddy.config_dir` | Shared Caddy config path. |
-| `release.caddy.path` | URL path for Caddy, such as `/app`. |
-| `release.haproxy.service` | HAProxy Compose service name. |
-| `release.haproxy.config_dir` | Shared HAProxy config path. |
-| `release.traefik.config_dir` | Shared Traefik config path. |
+All provider labels are optional. Defaults work for standard single-proxy setups.
+
+| Label | Default | Use |
+|---|---|---|
+| `release.nginx.service` | auto-detected by image | Nginx Compose service name. |
+| `release.nginx.config_dir` | `/shared/nginx-config` | Shared Nginx config path. |
+| `release.angie.service` | auto-detected by image | Angie Compose service name. |
+| `release.angie.config_dir` | `/shared/angie-config` | Shared Angie config path. |
+| `release.caddy.service` | auto-detected by image | Caddy Compose service name. |
+| `release.caddy.config_dir` | `/shared/caddy-config` | Shared Caddy config path. |
+| `release.caddy.path` | `/<service-name>` | URL path for Caddy. |
+| `release.haproxy.service` | auto-detected by image | HAProxy Compose service name. |
+| `release.haproxy.config_dir` | `/shared/haproxy-config` | Shared HAProxy config path. |
+| `release.traefik.config_dir` | `/shared/traefik-config` | Shared Traefik config path. |
 
 ## Health Checks
 
@@ -175,7 +187,7 @@ volumes:
 | Setting | Default | Why it is safe |
 |---|---|---|
 | Strategy | `linear` | Replaces one container at a time. |
-| Affinity | `cookie` | Keeps users on one backend when the provider supports it. |
+| Affinity | `ip` | Keeps users on one backend during a deployment. |
 | Drain timeout | `10s` | Gives old requests time to finish. |
 | Health timeout | `60s` | Gives new containers time to become ready. |
 

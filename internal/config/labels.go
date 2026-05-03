@@ -106,11 +106,42 @@ func ParseLabels(labels map[string]string) (*ServiceConfig, error) {
 		},
 	}
 
+	applyProviderDefaults(cfg)
+
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
 
 	return cfg, nil
+}
+
+func applyProviderDefaults(cfg *ServiceConfig) {
+	switch cfg.Provider {
+	case ProviderNginx:
+		if cfg.NginxConfigDir == "" {
+			cfg.NginxConfigDir = "/shared/nginx-config"
+		}
+	case ProviderNginxProxy:
+		if cfg.NginxConfigDir == "" {
+			cfg.NginxConfigDir = "/shared/nginx-tmpl"
+		}
+	case ProviderAngie:
+		if cfg.AngieConfigDir == "" {
+			cfg.AngieConfigDir = "/shared/angie-config"
+		}
+	case ProviderCaddy:
+		if cfg.CaddyConfigDir == "" {
+			cfg.CaddyConfigDir = "/shared/caddy-config"
+		}
+	case ProviderTraefik:
+		if cfg.TraefikConfigDir == "" {
+			cfg.TraefikConfigDir = "/shared/traefik-config"
+		}
+	case ProviderHAProxy:
+		if cfg.HAProxyConfigDir == "" {
+			cfg.HAProxyConfigDir = "/shared/haproxy-config"
+		}
+	}
 }
 
 func (c *ServiceConfig) validate() error {
@@ -228,7 +259,7 @@ func getOr(labels map[string]string, key, fallback string) string {
 func resolveAffinity(labels map[string]string) string {
 	v, ok := labels["release.affinity"]
 	if !ok {
-		return "cookie"
+		return "ip"
 	}
 	return v
 }

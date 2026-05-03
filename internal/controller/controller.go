@@ -263,7 +263,7 @@ func (c *Controller) deploy(parentCtx context.Context, serviceName string, cfg *
 		newContainers = c.waitForContainers(ctx, serviceName, newContainers[0].ImageID, expected)
 	}
 
-	prov := c.createProvider(cfg)
+	prov := c.createProvider(cfg, serviceName)
 
 	resolveAddr := cfg.Provider != config.ProviderNone
 
@@ -334,20 +334,24 @@ func (c *Controller) resolveNginxProxyUpstream(ctx context.Context, cfg *config.
 	cfg.UpstreamName = name
 }
 
-func (c *Controller) createProvider(cfg *config.ServiceConfig) provider.Provider {
+func (c *Controller) createProvider(cfg *config.ServiceConfig, serviceName string) provider.Provider {
 	switch cfg.Provider {
 	case config.ProviderNginx:
 		return provider.NewNginx(cfg.NginxConfigDir, c.docker, cfg.NginxService, c.project)
 	case config.ProviderAngie:
-		return provider.NewAngie(cfg.AngieConfigDir, c.docker, cfg.AngieService)
+		return provider.NewAngie(cfg.AngieConfigDir, c.docker, cfg.AngieService, c.project)
 	case config.ProviderTraefik:
 		return provider.NewTraefik(cfg.TraefikConfigDir)
 	case config.ProviderNginxProxy:
 		return c.getNginxProxyProvider(cfg)
 	case config.ProviderCaddy:
-		return provider.NewCaddy(cfg.CaddyConfigDir, c.docker, cfg.CaddyService, cfg.CaddyPath)
+		path := cfg.CaddyPath
+		if path == "" {
+			path = "/" + serviceName
+		}
+		return provider.NewCaddy(cfg.CaddyConfigDir, c.docker, cfg.CaddyService, path, c.project)
 	case config.ProviderHAProxy:
-		return provider.NewHAProxy(cfg.HAProxyConfigDir, c.docker, cfg.HAProxyService)
+		return provider.NewHAProxy(cfg.HAProxyConfigDir, c.docker, cfg.HAProxyService, c.project)
 	case config.ProviderNone:
 		return provider.NewNoop()
 	default:
@@ -669,7 +673,7 @@ func (c *Controller) Rollback(ctx context.Context, service string) error {
 	coord := rollback.NewCoordinator(c.stateManager, c.docker)
 
 	cfg := c.resolveServiceConfig(ctx, service)
-	prov := c.createProvider(cfg)
+	prov := c.createProvider(cfg, service)
 	coord.RegisterStrategy("linear", strategy.NewLinear(c.docker, prov, c.stateManager))
 	coord.RegisterStrategy("blue-green", strategy.NewBlueGreen(c.docker, prov, c.stateManager))
 	coord.RegisterStrategy("canary", strategy.NewCanary(c.docker, prov, c.stateManager))
@@ -876,7 +880,7 @@ func (c *Controller) cleanStaleConfigs(activeConfigs map[string]*config.ServiceC
 }
 
 func (c *Controller) generateServiceConfig(ctx context.Context, name string, cfg *config.ServiceConfig, containers []types.Container, checkHealth bool) {
-	prov := c.createProvider(cfg)
+	prov := c.createProvider(cfg, name)
 
 	upstream := &provider.UpstreamState{
 		Service:      name,

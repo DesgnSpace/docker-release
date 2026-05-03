@@ -103,37 +103,60 @@ func (c *Client) FindContainerByService(ctx context.Context, serviceName string)
 }
 
 func (c *Client) FindContainerByServiceInProject(ctx context.Context, project, serviceName string) (types.Container, error) {
+	return c.findContainerByService(ctx, project, serviceName, true)
+}
+
+func (c *Client) FindAnyContainerByServiceInProject(ctx context.Context, project, serviceName string) (types.Container, error) {
+	return c.findContainerByService(ctx, project, serviceName, false)
+}
+
+func (c *Client) findContainerByService(ctx context.Context, project, serviceName string, runningOnly bool) (types.Container, error) {
 	f := filters.NewArgs()
 	f.Add("label", fmt.Sprintf("com.docker.compose.service=%s", serviceName))
-	f.Add("status", "running")
+	if runningOnly {
+		f.Add("status", "running")
+	}
 	if project != "" {
 		f.Add("label", fmt.Sprintf("com.docker.compose.project=%s", project))
 	}
 
-	containers, err := c.api.ContainerList(ctx, container.ListOptions{Filters: f})
+	containers, err := c.api.ContainerList(ctx, container.ListOptions{All: !runningOnly, Filters: f})
 	if err != nil {
 		return types.Container{}, fmt.Errorf("listing containers: %w", err)
 	}
 
 	if len(containers) == 0 {
-		if project != "" {
-			return types.Container{}, fmt.Errorf("no running container found for service %q in project %q", serviceName, project)
+		state := "running"
+		if !runningOnly {
+			state = "any"
 		}
-
-		return types.Container{}, fmt.Errorf("no running container found for service %q", serviceName)
+		if project != "" {
+			return types.Container{}, fmt.Errorf("no %s container found for service %q in project %q", state, serviceName, project)
+		}
+		return types.Container{}, fmt.Errorf("no %s container found for service %q", state, serviceName)
 	}
 
 	return containers[0], nil
 }
 
 func (c *Client) FindContainerByImage(ctx context.Context, project, keyword string) (types.Container, error) {
+	return c.findContainerByImage(ctx, project, keyword, true)
+}
+
+func (c *Client) FindAnyContainerByImage(ctx context.Context, project, keyword string) (types.Container, error) {
+	return c.findContainerByImage(ctx, project, keyword, false)
+}
+
+func (c *Client) findContainerByImage(ctx context.Context, project, keyword string, runningOnly bool) (types.Container, error) {
 	f := filters.NewArgs()
-	f.Add("status", "running")
+	if runningOnly {
+		f.Add("status", "running")
+	}
 	if project != "" {
 		f.Add("label", fmt.Sprintf("com.docker.compose.project=%s", project))
 	}
 
-	containers, err := c.api.ContainerList(ctx, container.ListOptions{Filters: f})
+	containers, err := c.api.ContainerList(ctx, container.ListOptions{All: !runningOnly, Filters: f})
 	if err != nil {
 		return types.Container{}, fmt.Errorf("listing containers: %w", err)
 	}
@@ -146,10 +169,13 @@ func (c *Client) FindContainerByImage(ctx context.Context, project, keyword stri
 	}
 
 	if project != "" {
-		return types.Container{}, fmt.Errorf("no running container found in project %q with image containing %q", project, keyword)
+		return types.Container{}, fmt.Errorf("no container found in project %q with image containing %q", project, keyword)
 	}
+	return types.Container{}, fmt.Errorf("no container found with image containing %q", keyword)
+}
 
-	return types.Container{}, fmt.Errorf("no running container found with image containing %q", keyword)
+func (c *Client) Start(ctx context.Context, containerID string) error {
+	return c.api.ContainerStart(ctx, containerID, container.StartOptions{})
 }
 
 func (c *Client) MaxServiceContainerNumber(ctx context.Context, project, service string) int {

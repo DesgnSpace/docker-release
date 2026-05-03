@@ -10,19 +10,19 @@ import (
 	"github.com/malico/docker-release/internal/docker"
 )
 
-// AngieProvider is a provider for the Angie web server (a drop-in nginx replacement)
 type AngieProvider struct {
 	configDir   string
 	docker      *docker.Client
 	serviceName string
+	project     string
 }
 
-// NewAngie creates a new Angie provider
-func NewAngie(configDir string, dockerClient *docker.Client, serviceName string) *AngieProvider {
+func NewAngie(configDir string, dockerClient *docker.Client, serviceName, project string) *AngieProvider {
 	return &AngieProvider{
 		configDir:   configDir,
 		docker:      dockerClient,
 		serviceName: serviceName,
+		project:     project,
 	}
 }
 
@@ -52,21 +52,20 @@ func (p *AngieProvider) GenerateConfig(state *UpstreamState) error {
 	return nil
 }
 
-// Reload signals Angie to reload its configuration
 func (p *AngieProvider) Reload() error {
-	if p.serviceName == "" {
-		return nil
-	}
-
 	ctx := context.Background()
 
-	ctr, err := p.docker.FindContainerByService(ctx, p.serviceName)
+	ctr, running, err := resolveProxyContainer(ctx, p.docker, p.project, p.serviceName, "angie")
 	if err != nil {
-		return fmt.Errorf("resolving angie container %q: %w", p.serviceName, err)
+		return fmt.Errorf("resolving angie container: %w", err)
 	}
 
 	if !matchesImage(ctr.Image, "angie", "nginx", "alpine") {
-		return fmt.Errorf("container %q has unexpected image %q (want angie, nginx, or alpine-based)", p.serviceName, ctr.Image)
+		return fmt.Errorf("container %q has unexpected image %q (want angie, nginx, or alpine-based)", ctr.ID[:12], ctr.Image)
+	}
+
+	if !running {
+		return p.docker.Start(ctx, ctr.ID)
 	}
 
 	return p.docker.Exec(ctx, ctr.ID, []string{"angie", "-s", "reload"})

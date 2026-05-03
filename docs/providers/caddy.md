@@ -47,9 +47,6 @@ services:
     labels:
       release.enable: "true"
       release.provider: caddy
-      release.caddy.service: caddy
-      release.caddy.config_dir: /shared/caddy-config
-      release.caddy.path: /app
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost/health"]
       interval: 10s
@@ -74,20 +71,15 @@ volumes:
 ```yaml
 release.enable: "true"
 release.provider: caddy
-release.caddy.service: caddy
-release.caddy.config_dir: /shared/caddy-config
-release.caddy.path: /app
 ```
 
-## What Each Label Means
+## Optional Overrides
 
-| Label | Meaning |
-|---|---|
-| `release.enable` | Allows `docker-release` to manage this app. |
-| `release.provider` | Selects the Caddy provider. |
-| `release.caddy.service` | Name of the Caddy Compose service to reload. |
-| `release.caddy.config_dir` | Path where `docker-release` writes generated files. |
-| `release.caddy.path` | Public URL path for the app, such as `/app`. |
+| Label | Default | Override when |
+|---|---|---|
+| `release.caddy.service` | auto-detected by image | multiple Caddy containers in the project |
+| `release.caddy.config_dir` | `/shared/caddy-config` | shared volume mounted at a different path |
+| `release.caddy.path` | `/<service-name>` | URL path differs from the service name; set to empty for named-snippet mode |
 
 ## Deploy
 
@@ -128,7 +120,6 @@ release.affinity: cookie
 release.strategy: blue-green
 release.bg.soak_time: 5m
 release.bg.green_weight: 50
-release.affinity: ip
 ```
 
 ## Path Examples

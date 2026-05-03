@@ -163,7 +163,7 @@ func TestAngieRenderUpstreamKeepalive(t *testing.T) {
 
 func TestAngieGenerateConfigWritesFile(t *testing.T) {
 	dir := t.TempDir()
-	p := NewAngie(dir, nil, "")
+	p := NewAngie(dir, nil, "", "")
 
 	state := &UpstreamState{
 		Service: "webapp",
