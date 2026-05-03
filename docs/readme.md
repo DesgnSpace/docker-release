@@ -4,6 +4,18 @@ Use `docker-release` to deploy Docker Compose services without planned downtime.
 
 This page gives the short version. Provider guides hold the full setup examples.
 
+## What You Need
+
+Every setup needs three parts:
+
+| Part | Why it is needed |
+|---|---|
+| `docker-release` service | Watches Docker and runs deploys. |
+| Docker socket mount | Lets `docker-release` start, stop, and inspect containers. |
+| Managed app labels | Tell `docker-release` which services it can deploy. |
+
+Most web apps also need a proxy provider. The proxy still serves traffic. `docker-release` only writes config for it.
+
 ## Pick a Provider
 
 | Provider | Use it when | Guide |
@@ -47,6 +59,24 @@ docker release release status
 3. Add new containers to the proxy.
 4. Drain old containers.
 5. Stop old containers.
+
+## How Config Moves
+
+For file-based providers, `docker-release` and the proxy share a Docker volume.
+
+Example with Nginx:
+
+```yaml
+docker-release:
+  volumes:
+    - nginx-config:/shared/nginx-config:rw # writes generated upstream files
+
+nginx:
+  volumes:
+    - nginx-config:/etc/nginx/conf.d/custom:ro # reads generated upstream files
+```
+
+The path is different for each provider. Use the provider guide for the exact mount.
 
 ## Strategies
 
@@ -112,6 +142,18 @@ release.affinity: ip
 
 Add a Docker `healthcheck` to each app service. `docker-release` waits for `healthy` before it sends traffic to a new container.
 
+If a service has no health check, Docker may not report a useful `healthy` state. Add a small endpoint or command that proves the app can serve work.
+
+Example:
+
+```yaml
+healthcheck:
+  test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+  interval: 10s
+  timeout: 5s
+  retries: 3
+```
+
 ## Optional Rollback State
 
 Basic examples do not need this volume.
@@ -127,3 +169,16 @@ services:
 volumes:
   docker-release-state:
 ```
+
+## Safe Defaults
+
+| Setting | Default | Why it is safe |
+|---|---|---|
+| Strategy | `linear` | Replaces one container at a time. |
+| Affinity | `cookie` | Keeps users on one backend when the provider supports it. |
+| Drain timeout | `10s` | Gives old requests time to finish. |
+| Health timeout | `60s` | Gives new containers time to become ready. |
+
+## Next Step
+
+Open the provider guide for your proxy and copy the full example.

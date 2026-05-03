@@ -4,6 +4,26 @@ Use this when your app runs behind Caddy.
 
 `docker-release` writes `.caddy` files to a shared volume, then reloads Caddy.
 
+## When to Use This
+
+Use this provider when Caddy is your reverse proxy and you want `docker-release` to create `reverse_proxy` blocks for your apps.
+
+This is a good fit if your apps use path routes like `/app` or `/api`.
+
+## What Gets Written
+
+For `release.caddy.path: /app`, `docker-release` writes a file like this:
+
+```caddy
+handle_path /app* {
+    reverse_proxy 172.18.0.4:80 172.18.0.5:80 {
+        lb_policy cookie _srr_a172cedcae
+    }
+}
+```
+
+`handle_path` removes `/app` before the request reaches your app.
+
 ## Compose Example
 
 ```yaml
@@ -12,15 +32,15 @@ services:
     image: malico/docker-release:0.1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - caddy-config:/shared/caddy-config:rw
+      - caddy-config:/shared/caddy-config:rw # docker-release writes Caddy files here
 
   caddy:
     image: caddy:alpine
     ports:
       - "80:80"
     volumes:
-      - caddy-config:/etc/caddy/conf.d:ro
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-config:/etc/caddy/conf.d:ro # Caddy reads generated files here
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro # Your base Caddy config
 
   app:
     image: your-registry/app:latest
@@ -58,6 +78,16 @@ release.caddy.service: caddy
 release.caddy.config_dir: /shared/caddy-config
 release.caddy.path: /app
 ```
+
+## What Each Label Means
+
+| Label | Meaning |
+|---|---|
+| `release.enable` | Allows `docker-release` to manage this app. |
+| `release.provider` | Selects the Caddy provider. |
+| `release.caddy.service` | Name of the Caddy Compose service to reload. |
+| `release.caddy.config_dir` | Path where `docker-release` writes generated files. |
+| `release.caddy.path` | Public URL path for the app, such as `/app`. |
 
 ## Deploy
 

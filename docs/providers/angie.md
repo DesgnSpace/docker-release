@@ -4,6 +4,26 @@ Use this when your app runs behind Angie.
 
 `docker-release` writes upstream files to a shared volume, then reloads Angie.
 
+## When to Use This
+
+Use this provider when you run Angie as your reverse proxy and can add an `include` line to its config.
+
+Angie is close to Nginx, but many Angie images use `/etc/angie/http.d` instead of `/etc/nginx/conf.d`.
+
+## What Gets Written
+
+For an app named `app`, `docker-release` writes a file like this:
+
+```nginx
+upstream app_upstream {
+    sticky cookie _srr_a172cedcae path=/;
+    server 172.18.0.4:80;
+    server 172.18.0.5:80;
+}
+```
+
+Your Angie config chooses where that upstream is used.
+
 ## Compose Example
 
 ```yaml
@@ -12,15 +32,15 @@ services:
     image: malico/docker-release:0.1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - angie-config:/shared/angie-config:rw
+      - angie-config:/shared/angie-config:rw # docker-release writes Angie upstream files here
 
   angie:
     image: docker.angie.software/angie:latest
     ports:
       - "80:80"
     volumes:
-      - angie-config:/etc/angie/http.d/custom:ro
-      - ./angie.conf:/etc/angie/http.d/default.conf:ro
+      - angie-config:/etc/angie/http.d/custom:ro # Angie reads generated upstream files here
+      - ./angie.conf:/etc/angie/http.d/default.conf:ro # Your base Angie routes
 
   app:
     image: your-registry/app:latest
@@ -66,6 +86,15 @@ release.provider: angie
 release.angie.service: angie
 release.angie.config_dir: /shared/angie-config
 ```
+
+## What Each Label Means
+
+| Label | Meaning |
+|---|---|
+| `release.enable` | Allows `docker-release` to manage this app. |
+| `release.provider` | Selects the Angie provider. |
+| `release.angie.service` | Name of the Angie Compose service to reload. |
+| `release.angie.config_dir` | Path where `docker-release` writes generated files. |
 
 ## Deploy
 

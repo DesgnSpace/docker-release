@@ -4,6 +4,19 @@ Use this for workers, jobs, and services that do not receive web traffic.
 
 `docker-release` replaces containers and waits for health checks. It does not write proxy config.
 
+## When to Use This
+
+Use this provider for services that do work in the background and do not receive web traffic.
+
+Good examples:
+
+- queue workers
+- schedulers
+- cron jobs
+- sidecars
+
+Do not use this provider for web apps that need canary or blue/green traffic splitting.
+
 ## Compose Example
 
 ```yaml
@@ -34,6 +47,13 @@ services:
 release.enable: "true"
 release.provider: none
 ```
+
+## What Each Label Means
+
+| Label | Meaning |
+|---|---|
+| `release.enable` | Allows `docker-release` to manage this service. |
+| `release.provider` | Set to `none` so no proxy config is written. |
 
 ## Deploy
 

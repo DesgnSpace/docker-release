@@ -4,6 +4,18 @@ Use this when your stack uses `nginxproxy/nginx-proxy`.
 
 `docker-release` updates the `nginx-proxy` template. `nginx-proxy` reloads from Docker events.
 
+## When to Use This
+
+Use this provider only with `nginxproxy/nginx-proxy`.
+
+Your app routing still uses `VIRTUAL_HOST`, `VIRTUAL_PATH`, and related environment variables. `docker-release` updates the template so the active container list matches the deploy state.
+
+## What Gets Written
+
+`docker-release` writes a managed `nginx.tmpl` file. `nginx-proxy` uses that template to render Nginx config.
+
+The template keeps normal `nginx-proxy` behavior for services that `docker-release` does not manage.
+
 ## Compose Example
 
 ```yaml
@@ -12,7 +24,7 @@ services:
     image: malico/docker-release:0.1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - nginx-tmpl:/shared/nginx-tmpl:rw
+      - nginx-tmpl:/shared/nginx-tmpl:rw # docker-release writes nginx.tmpl here
 
   nginx-proxy:
     image: nginxproxy/nginx-proxy:alpine
@@ -20,7 +32,9 @@ services:
       - "80:80"
     volumes:
       - /var/run/docker.sock:/tmp/docker.sock:ro
-      - nginx-tmpl:/etc/docker-gen/templates:ro
+      - nginx-tmpl:/app/custom:ro # nginx-proxy reads nginx.tmpl here
+    environment:
+      NGINX_TMPL: /app/custom/nginx.tmpl
 
   app:
     image: your-registry/app:latest
@@ -49,6 +63,23 @@ release.enable: "true"
 release.provider: nginx-proxy
 release.nginx.config_dir: /shared/nginx-tmpl
 ```
+
+## What Each Label Means
+
+| Label | Meaning |
+|---|---|
+| `release.enable` | Allows `docker-release` to manage this app. |
+| `release.provider` | Selects the nginx-proxy provider. |
+| `release.nginx.config_dir` | Folder where `docker-release` writes `nginx.tmpl`. |
+
+## What Each Environment Variable Means
+
+| Variable | Meaning |
+|---|---|
+| `VIRTUAL_HOST` | Host name that nginx-proxy listens on. |
+| `VIRTUAL_PATH` | URL path for the app. Use a trailing slash, such as `/app/`. |
+| `VIRTUAL_DEST` | Path sent to the app after routing. Use `/` to strip the prefix. |
+| `VIRTUAL_PORT` | App port to proxy to when the image exposes more than one port. |
 
 ## Required Environment
 

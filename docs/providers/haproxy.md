@@ -4,6 +4,26 @@ Use this when your app runs behind HAProxy.
 
 `docker-release` writes backend files to a shared volume, then reloads HAProxy.
 
+## When to Use This
+
+Use this provider when HAProxy owns routing and you want `docker-release` to manage only backend server lists.
+
+You still write the `frontend` rules. `docker-release` writes the `backend` blocks.
+
+## What Gets Written
+
+For an app named `app`, `docker-release` writes a file like this:
+
+```haproxy
+backend app_be
+    mode http
+    option http-keep-alive
+    http-reuse safe
+    balance roundrobin
+    server s1 172.18.0.4:80
+    server s2 172.18.0.5:80
+```
+
 ## Compose Example
 
 ```yaml
@@ -12,15 +32,15 @@ services:
     image: malico/docker-release:0.1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - haproxy-config:/shared/haproxy-config:rw
+      - haproxy-config:/shared/haproxy-config:rw # docker-release writes HAProxy backend files here
 
   haproxy:
     image: haproxy:lts-alpine
     ports:
       - "80:80"
     volumes:
-      - haproxy-config:/etc/haproxy/conf.d:ro
-      - ./haproxy.cfg:/etc/haproxy/haproxy.cfg:ro
+      - haproxy-config:/etc/haproxy/conf.d:ro # HAProxy reads generated backend files here
+      - ./haproxy.cfg:/etc/haproxy/haproxy.cfg:ro # Your frontend routes
     command: ["haproxy", "-W", "-f", "/etc/haproxy/haproxy.cfg", "-f", "/etc/haproxy/conf.d"]
 
   app:
@@ -69,6 +89,15 @@ release.provider: haproxy
 release.haproxy.service: haproxy
 release.haproxy.config_dir: /shared/haproxy-config
 ```
+
+## What Each Label Means
+
+| Label | Meaning |
+|---|---|
+| `release.enable` | Allows `docker-release` to manage this app. |
+| `release.provider` | Selects the HAProxy provider. |
+| `release.haproxy.service` | Name of the HAProxy Compose service to reload. |
+| `release.haproxy.config_dir` | Path where `docker-release` writes generated files. |
 
 ## Deploy
 

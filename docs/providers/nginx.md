@@ -4,6 +4,26 @@ Use this when your app runs behind Nginx.
 
 `docker-release` writes upstream files to a shared volume, then reloads Nginx.
 
+## When to Use This
+
+Use this provider when you control the Nginx config and can add one `include` line.
+
+Do not use this provider if another tool owns all Nginx config. Use `nginx-proxy` if you use `nginxproxy/nginx-proxy`.
+
+## What Gets Written
+
+For an app named `app`, `docker-release` writes a file like this:
+
+```nginx
+upstream app_upstream {
+    ip_hash;
+    server 172.18.0.4:80;
+    server 172.18.0.5:80;
+}
+```
+
+Your Nginx config chooses where that upstream is used.
+
 ## Compose Example
 
 ```yaml
@@ -66,6 +86,15 @@ release.provider: nginx
 release.nginx.service: nginx
 release.nginx.config_dir: /shared/nginx-config
 ```
+
+## What Each Label Means
+
+| Label | Meaning |
+|---|---|
+| `release.enable` | Allows `docker-release` to manage this app. |
+| `release.provider` | Selects the Nginx provider. |
+| `release.nginx.service` | Name of the Nginx Compose service to reload. |
+| `release.nginx.config_dir` | Path where `docker-release` writes generated files. |
 
 ## Deploy
 
