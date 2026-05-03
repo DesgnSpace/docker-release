@@ -11,6 +11,9 @@ services:
 
   traefik:
     image: traefik:v3.4
+    depends_on:
+      docker-release:
+        condition: service_healthy
     command:
       - "--api.insecure=true"
       - "--entrypoints.web.address=:80"

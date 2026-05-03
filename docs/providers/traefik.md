@@ -44,6 +44,9 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik-config:/etc/traefik/dynamic:ro # Traefik reads generated YAML here
+    depends_on:
+      docker-release:
+        condition: service_healthy # wait until docker-release has written service files
     command:
       - --api.insecure=true
       - --providers.docker=true

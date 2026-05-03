@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/malico/docker-release/internal/docker"
+	"github.com/malico/docker-release/internal/health"
 )
 
 type AngieProvider struct {
@@ -49,6 +50,7 @@ func (p *AngieProvider) GenerateConfig(state *UpstreamState) error {
 		return fmt.Errorf("renaming config: %w", err)
 	}
 
+	health.RecordFile(path)
 	return nil
 }
 

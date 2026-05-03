@@ -17,7 +17,7 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
     depends_on:
       docker-release:
-        condition: service_started
+        condition: service_healthy
 
   linear_app:
     image: traefik/whoami

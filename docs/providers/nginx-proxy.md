@@ -35,6 +35,9 @@ services:
       - nginx-tmpl:/app/custom:ro # nginx-proxy reads nginx.tmpl here
     environment:
       NGINX_TMPL: /app/custom/nginx.tmpl
+    depends_on:
+      docker-release:
+        condition: service_healthy # wait until docker-release has written the template
 
   app:
     image: your-registry/app:latest

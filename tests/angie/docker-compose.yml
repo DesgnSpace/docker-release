@@ -17,7 +17,7 @@ services:
       - ./angie.conf:/etc/angie/http.d/default.conf:ro
     depends_on:
       docker-release:
-        condition: service_started
+        condition: service_healthy
 
   linear_app:
     image: traefik/whoami

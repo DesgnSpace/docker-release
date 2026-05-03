@@ -39,6 +39,9 @@ services:
     volumes:
       - caddy-config:/etc/caddy/conf.d:ro # Caddy reads generated files here
       - ./Caddyfile:/etc/caddy/Caddyfile:ro # Your base Caddy config
+    depends_on:
+      docker-release:
+        condition: service_healthy # wait until docker-release has written snippet files
 
   app:
     image: your-registry/app:latest

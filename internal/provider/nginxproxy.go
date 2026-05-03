@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/malico/docker-release/internal/health"
 )
 
 //go:embed stock/nginx.tmpl
@@ -120,6 +122,7 @@ func (p *NginxProxyProvider) writeTemplate() error {
 		return fmt.Errorf("renaming template: %w", err)
 	}
 
+	health.RecordFile(p.templatePath)
 	return nil
 }
 

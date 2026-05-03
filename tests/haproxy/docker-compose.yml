@@ -18,7 +18,7 @@ services:
     command: ["haproxy", "-W", "-f", "/etc/haproxy/haproxy.cfg", "-f", "/etc/haproxy/conf.d"]
     depends_on:
       docker-release:
-        condition: service_started
+        condition: service_healthy
 
   linear_app:
     image: traefik/whoami

@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/malico/docker-release/internal/health"
 )
 
 type TraefikProvider struct {
@@ -37,6 +39,7 @@ func (p *TraefikProvider) GenerateConfig(state *UpstreamState) error {
 		return fmt.Errorf("renaming config: %w", err)
 	}
 
+	health.RecordFile(path)
 	return nil
 }
 

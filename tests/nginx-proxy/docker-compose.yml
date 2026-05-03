@@ -21,7 +21,7 @@ services:
       - HTTP_PORT=8080
     depends_on:
       docker-release:
-        condition: service_started
+        condition: service_healthy
 
   linear_app:
     image: traefik/whoami

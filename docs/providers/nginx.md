@@ -41,6 +41,9 @@ services:
     volumes:
       - nginx-config:/etc/nginx/conf.d/custom:ro # Nginx reads generated upstream files here
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro # Your base Nginx routes
+    depends_on:
+      docker-release:
+        condition: service_healthy # wait until docker-release has written upstream files
 
   app:
     image: your-registry/app:latest

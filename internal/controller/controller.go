@@ -12,6 +12,7 @@ import (
 
 	"github.com/malico/docker-release/internal/config"
 	"github.com/malico/docker-release/internal/docker"
+	"github.com/malico/docker-release/internal/health"
 	"github.com/malico/docker-release/internal/monitor"
 	"github.com/malico/docker-release/internal/provider"
 	"github.com/malico/docker-release/internal/rollback"
@@ -47,6 +48,8 @@ func New(dockerClient *docker.Client, stateManager *state.Manager, project strin
 }
 
 func (c *Controller) Watch(ctx context.Context) error {
+	health.ClearReady()
+
 	if err := c.docker.Ping(ctx); err != nil {
 		return fmt.Errorf("docker not reachable: %w", err)
 	}
@@ -68,6 +71,11 @@ func (c *Controller) Watch(ctx context.Context) error {
 	defer commandTicker.Stop()
 
 	c.generateInitialConfigs(ctx, services)
+
+	if err := health.MarkReady(); err != nil {
+		log.Printf("warning: could not write ready sentinel: %v", err)
+	}
+
 	c.processReleaseCommands(ctx)
 
 	log.Println("watching for events... (ctrl+c to stop)")
@@ -1032,23 +1040,6 @@ func (c *Controller) generateServiceConfig(ctx context.Context, name string, cfg
 				Addr: addr,
 				Down: down,
 			})
-		}
-	}
-
-	if len(upstream.Servers) == 0 {
-		return
-	}
-
-	if checkHealth {
-		hasActive := false
-		for _, s := range upstream.Servers {
-			if !s.Down {
-				hasActive = true
-				break
-			}
-		}
-		if !hasActive {
-			return
 		}
 	}
 

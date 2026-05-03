@@ -11,6 +11,7 @@ import (
 	"github.com/malico/docker-release/internal/config"
 	"github.com/malico/docker-release/internal/controller"
 	"github.com/malico/docker-release/internal/docker"
+	"github.com/malico/docker-release/internal/health"
 	"github.com/malico/docker-release/internal/state"
 )
 
@@ -64,6 +65,10 @@ func main() {
 		run(func(ctrl *controller.Controller) error {
 			return ctrl.Status(context.Background(), service)
 		})
+	case "healthcheck":
+		if !health.IsReady() {
+			os.Exit(1)
+		}
 	case "version":
 		fmt.Printf("dr %s\n", version)
 	case "help", "--help", "-h":

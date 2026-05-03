@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/malico/docker-release/internal/docker"
+	"github.com/malico/docker-release/internal/health"
 )
 
 type NginxProvider struct {
@@ -48,6 +49,7 @@ func (p *NginxProvider) GenerateConfig(state *UpstreamState) error {
 		return fmt.Errorf("renaming config: %w", err)
 	}
 
+	health.RecordFile(path)
 	return nil
 }
 
