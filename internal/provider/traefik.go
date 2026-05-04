@@ -76,11 +76,8 @@ func renderLoadBalancerService(b *strings.Builder, state *UpstreamState) {
 	fmt.Fprintf(b, "    %s:\n", state.Service)
 	b.WriteString("      loadBalancer:\n")
 
-	switch state.Affinity {
-	case "cookie":
+	if state.Affinity == "cookie" || state.Affinity == "ip" {
 		writeTraefikStickyCookie(b, stickyCookieName(state))
-	case "ip":
-		b.WriteString("        strategy: \"hrw\"\n")
 	}
 
 	b.WriteString("        servers:\n")

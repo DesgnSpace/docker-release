@@ -10,7 +10,7 @@ services:
       - docker-release-state:/var/lib/docker-release:rw
 
   traefik:
-    image: traefik:v3.4
+    image: traefik:v3
     depends_on:
       docker-release:
         condition: service_healthy
@@ -30,6 +30,9 @@ services:
 
   linear_app:
     image: traefik/whoami
+    depends_on:
+      docker-release:
+        condition: service_healthy
     environment:
       - WHOAMI_NAME=linear
     labels:
@@ -46,6 +49,9 @@ services:
 
   canary_app:
     image: traefik/whoami
+    depends_on:
+      docker-release:
+        condition: service_healthy
     environment:
       - WHOAMI_NAME=canary
     labels:
@@ -66,6 +72,9 @@ services:
 
   blue_green_app:
     image: traefik/whoami
+    depends_on:
+      docker-release:
+        condition: service_healthy
     environment:
       - WHOAMI_NAME=blue_green
     labels:

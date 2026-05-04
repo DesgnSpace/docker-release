@@ -113,11 +113,11 @@ func TestRenderTraefikWithIPAffinity(t *testing.T) {
 
 	got := renderTraefikYAML(state)
 
-	if !strings.Contains(got, `strategy: "hrw"`) {
-		t.Error("ip affinity should use Traefik HRW strategy")
+	if !strings.Contains(got, "sticky:") || !strings.Contains(got, "cookie:") {
+		t.Error("ip affinity on a non-weighted Traefik service should fall back to sticky cookie")
 	}
-	if strings.Contains(got, "sticky:") || strings.Contains(got, "cookie:") {
-		t.Error("ip affinity should not use sticky cookie in Traefik")
+	if strings.Contains(got, `strategy: "hrw"`) {
+		t.Error("hrw is not a valid loadBalancer field in Traefik; only valid as a service type for weighted services")
 	}
 }
 

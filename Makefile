@@ -16,18 +16,34 @@ build: buildx-builder
 
 tag:
 	@test "$(VERSION)" != "dev" || (echo "ERROR: set VERSION=x.y.z"; exit 1)
-	git tag -a v$(VERSION) -m "Release v$(VERSION)"
-	git push origin v$(VERSION)
+	@git fetch --tags origin 2>/dev/null; \
+	if git tag -l | grep -q "^v$(VERSION)$$"; then \
+		echo "ERROR: tag v$(VERSION) already exists"; exit 1; \
+	fi
+	@git tag -a v$(VERSION) -m "Release v$(VERSION)"
+	@git push origin v$(VERSION)
+	@echo "Pushing sub-tags and latest..."
+	@echo "$(VERSION)" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$$' && { \
+		MAJOR=$$(echo "$(VERSION)" | cut -d. -f1); \
+		MINOR=$$(echo "$(VERSION)" | cut -d. -f1-2); \
+		git push origin v$${MAJOR} v$${MINOR} 2>/dev/null || true; \
+	} || true
+	@echo "Updating latest tag..."
+	@git tag -d latest 2>/dev/null || true; \
+	git tag -a latest -m "Latest release v$(VERSION)"; \
+	git push origin latest --force 2>/dev/null || true
 
-publish: tag buildx-builder
-	docker buildx build \
+publish:
+	@test "$(VERSION)" != "dev" || (echo "ERROR: set VERSION=x.y.z"; exit 1)
+	$(MAKE) buildx-builder
+	@docker buildx build \
 		--builder docker-release-builder \
 		--platform linux/amd64,linux/arm64 \
 		--build-arg VERSION=$(VERSION) \
 		-t $(IMAGE):$(VERSION) \
 		-t $(IMAGE):latest \
 		--push \
-		.
+		. && $(MAKE) tag
 
 buildx-builder:
 	@docker buildx inspect docker-release-builder >/dev/null 2>&1 || \
