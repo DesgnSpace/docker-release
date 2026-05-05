@@ -240,12 +240,8 @@ func (c *Client) CreateContainerFromImage(ctx context.Context, ref types.Contain
 	}
 	labels["com.docker.compose.container-number"] = strconv.Itoa(num)
 
-	cfg := &container.Config{
-		Image:        refInfo.Config.Image,
-		Labels:       labels,
-		ExposedPorts: refInfo.Config.ExposedPorts,
-		Env:          refInfo.Config.Env,
-	}
+	cfg := *refInfo.Config
+	cfg.Labels = labels
 
 	primaryNet, primaryNetID := primaryNetwork(ref)
 
@@ -258,8 +254,15 @@ func (c *Client) CreateContainerFromImage(ctx context.Context, ref types.Contain
 		}
 	}
 
+	var hostCfg *container.HostConfig
+	if refInfo.HostConfig != nil {
+		copied := *refInfo.HostConfig
+		copied.PortBindings = nil
+		hostCfg = &copied
+	}
+
 	name := nextContainerName(ref, num)
-	resp, err := c.api.ContainerCreate(ctx, cfg, nil, networkCfg, nil, name)
+	resp, err := c.api.ContainerCreate(ctx, &cfg, hostCfg, networkCfg, nil, name)
 	if err != nil {
 		return "", fmt.Errorf("creating container: %w", err)
 	}
