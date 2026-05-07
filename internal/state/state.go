@@ -5,9 +5,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 )
@@ -157,6 +159,45 @@ func GenerateDeploymentID() string {
 	b := make([]byte, 4)
 	rand.Read(b)
 	return fmt.Sprintf("deploy_%s_%s", time.Now().Format("20060102150405"), hex.EncodeToString(b))
+}
+
+func (m *Manager) ListAll() ([]*DeploymentState, error) {
+	entries, err := os.ReadDir(m.dir)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("reading state dir: %w", err)
+	}
+
+	prefix := ""
+	if m.project != "" {
+		prefix = m.project + "_"
+	}
+	const suffix = "_state.json"
+
+	result := make([]*DeploymentState, 0)
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !strings.HasPrefix(name, prefix) || !strings.HasSuffix(name, suffix) {
+			continue
+		}
+		service := strings.TrimPrefix(name, prefix)
+		service = strings.TrimSuffix(service, suffix)
+		if service == "" {
+			continue
+		}
+		s, err := m.Load(service)
+		if err != nil {
+			log.Printf("[state] skipping %s: %v", name, err)
+			continue
+		}
+		result = append(result, s)
+	}
+	return result, nil
 }
 
 func (m *Manager) path(service string) string {

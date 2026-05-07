@@ -11,6 +11,7 @@ FROM alpine:3.21
 RUN apk add --no-cache ca-certificates
 COPY --from=builder /bin/dr /usr/local/bin/dr
 LABEL org.opencontainers.image.title="docker-release"
+EXPOSE 9080 9081
 HEALTHCHECK --interval=5s --timeout=2s --start-period=30s --retries=6 \
   CMD ["dr", "healthcheck"]
 ENTRYPOINT ["dr"]

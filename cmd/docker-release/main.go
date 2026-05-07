@@ -12,6 +12,7 @@ import (
 	"github.com/malico/docker-release/internal/controller"
 	"github.com/malico/docker-release/internal/docker"
 	"github.com/malico/docker-release/internal/health"
+	"github.com/malico/docker-release/internal/server"
 	"github.com/malico/docker-release/internal/state"
 )
 
@@ -153,6 +154,17 @@ func run(fn func(*controller.Controller) error) {
 func cmdWatch(ctrl *controller.Controller) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
+
+	cfg := server.ConfigFromEnv()
+	cfg.Version = version
+	if cfg.APIEnabled || cfg.WebEnabled {
+		srv := server.New(cfg, ctrl, ctrl.StateManager(), ctrl.Project())
+		go func() {
+			if err := srv.Start(ctx); err != nil {
+				log.Printf("[server] %v", err)
+			}
+		}()
+	}
 
 	return ctrl.Watch(ctx)
 }

@@ -7,6 +7,12 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - angie-config:/shared/angie-config:rw
     command: ["watch"]
+    environment:
+      - DR_EXPOSE_API=true
+      - DR_EXPOSE_WEB=true
+    ports:
+      - "9080:9080"
+      - "9081:9081"
 
   angie:
     image: docker.angie.software/angie:latest

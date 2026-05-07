@@ -71,6 +71,7 @@ func (c *Controller) Watch(ctx context.Context) error {
 	defer commandTicker.Stop()
 
 	c.generateInitialConfigs(ctx, services)
+	c.recoverInterruptedDeployments(ctx)
 
 	if err := health.MarkReady(); err != nil {
 		log.Printf("warning: could not write ready sentinel: %v", err)
@@ -103,6 +104,84 @@ func (c *Controller) Watch(ctx context.Context) error {
 			return nil
 		}
 	}
+}
+
+func (c *Controller) CancelDeployment(service string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	d, ok := c.deployments[service]
+	if !ok {
+		return false
+	}
+	d.cancel()
+	return true
+}
+
+func (c *Controller) recoverInterruptedDeployments(ctx context.Context) {
+	states, err := c.stateManager.ListAll()
+	if err != nil {
+		log.Printf("[recovery] error reading state: %v", err)
+		return
+	}
+	for _, ds := range states {
+		if ds.Status == state.StatusIdle {
+			continue
+		}
+		c.recoverService(ctx, ds)
+	}
+}
+
+func (c *Controller) recoverService(ctx context.Context, ds *state.DeploymentState) {
+	log.Printf("[recovery] %s status=%s strategy=%s updated=%s",
+		ds.Service, string(ds.Status), ds.Strategy, ds.UpdatedAt.UTC().Format(time.RFC3339))
+
+	if !c.anyContainerRunning(ctx, ds.Containers.Canary) {
+		log.Printf("[recovery] %s no live canary containers, resetting to idle", ds.Service)
+		ds.Status = state.StatusIdle
+		ds.Containers.Canary = nil
+		if err := c.stateManager.Save(ds); err != nil {
+			log.Printf("[recovery] %s error saving state: %v", ds.Service, err)
+		}
+		return
+	}
+
+	log.Printf("[recovery] %s found live canary containers, rolling back to free resources", ds.Service)
+	if err := c.Rollback(ctx, ds.Service); err != nil {
+		log.Printf("[recovery] %s rollback error: %v", ds.Service, err)
+		return
+	}
+	log.Printf("[recovery] %s rolled back successfully", ds.Service)
+}
+
+func (c *Controller) anyContainerRunning(ctx context.Context, ids []string) bool {
+	for _, id := range ids {
+		info, err := c.docker.Inspect(ctx, id)
+		if err != nil {
+			continue
+		}
+		if info.State.Running {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Controller) StateManager() *state.Manager {
+	return c.stateManager
+}
+
+func (c *Controller) Project() string {
+	return c.project
+}
+
+func (c *Controller) ActiveDeployments() map[string]string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make(map[string]string, len(c.deployments))
+	for service, d := range c.deployments {
+		out[service] = d.id
+	}
+	return out
 }
 
 func (c *Controller) EnqueueRelease(service string, force bool) error {

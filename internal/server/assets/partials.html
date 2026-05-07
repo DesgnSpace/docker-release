@@ -1,0 +1,15 @@
+{{define "rows"}}
+{{- range .}}
+<tr>
+  <td>{{.Service}}</td>
+  <td><span class="pill {{.StatusClass}}">{{.StatusLabel}}</span></td>
+  <td>{{if .Strategy}}{{.Strategy}}{{else}}<span class="dim">—</span>{{end}}</td>
+  <td>{{if .CurrentWeight}}{{.CurrentWeight}}%{{else}}<span class="dim">—</span>{{end}}</td>
+  <td class="mono">{{if .ActiveDeploymentID}}{{.ActiveDeploymentID}}{{else}}<span class="dim">—</span>{{end}}</td>
+  <td class="mono">{{if .PreviousDeploymentID}}{{.PreviousDeploymentID}}{{else}}<span class="dim">—</span>{{end}}</td>
+  <td class="dim">{{.UpdatedAtFmt}}</td>
+</tr>
+{{- else}}
+<tr><td colspan="7" class="empty">no deployments found</td></tr>
+{{- end}}
+{{end}}

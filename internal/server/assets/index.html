@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>dr · {{.Project}}</title>
+  <script src="https://unpkg.com/htmx.org@2.0.4" crossorigin="anonymous"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0d0d0d; color: #d4d4d4; padding: 2rem; font-size: 0.875rem }
+    h1 { font-size: 1rem; font-weight: 600; color: #fff; margin-bottom: 1.5rem; letter-spacing: 0.01em }
+    h1 span { color: #555; font-weight: 400 }
+    table { width: 100%; border-collapse: collapse }
+    th { text-align: left; padding: 0.4rem 0.75rem; color: #555; font-weight: 500; border-bottom: 1px solid #1f1f1f; white-space: nowrap }
+    td { padding: 0.45rem 0.75rem; border-bottom: 1px solid #181818; vertical-align: middle }
+    td.mono { font-family: ui-monospace, monospace; font-size: 0.8rem; color: #888 }
+    td.dim, span.dim { color: #3a3a3a }
+    td.empty { text-align: center; color: #3a3a3a; padding: 2rem }
+    .pill { display: inline-flex; align-items: center; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase }
+    .idle        { background: #0e2218; color: #34d399 }
+    .in_progress { background: #251d0a; color: #fbbf24 }
+    .rolling_back{ background: #200d0d; color: #f87171 }
+    .stale       { background: #1f1200; color: #fb923c }
+  </style>
+</head>
+<body>
+  <h1>docker-release <span>· {{.Project}}</span></h1>
+  <table>
+    <thead>
+      <tr>
+        <th>Service</th>
+        <th>Status</th>
+        <th>Strategy</th>
+        <th>Weight</th>
+        <th>Active deploy</th>
+        <th>Previous</th>
+        <th>Updated</th>
+      </tr>
+    </thead>
+    <tbody hx-get="/partials/services" hx-trigger="every 2s" hx-swap="innerHTML">
+      {{template "rows" .Services}}
+    </tbody>
+  </table>
+</body>
+</html>
